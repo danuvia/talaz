@@ -87,6 +87,13 @@ const MODS: &[(&str, &str, &str)] = &[
     ("fpslimit", "FPS Limit", "Caps the frame rate to keep the computer cool and quiet"),
 ];
 
+/// The one setting a mod has in the launcher: mod, key, unit, default and the values to pick from.
+/// The defaults are the mod's own, from mod/src/mods.cpp
+const OPTIONS: &[(&str, &str, &str, f32, &[f32])] = &[
+    ("zoom", "zoom.factor", "×", 4.0, &[2.0, 3.0, 4.0, 6.0, 8.0]),
+    ("fpslimit", "fpslimit.cap", " fps", 60.0, &[30.0, 60.0, 90.0, 120.0, 144.0, 240.0]),
+];
+
 /// The file the mod keeps the active profile's settings in, next to its library
 fn profile_file() -> Option<PathBuf> {
     let base = mods_dir()?.join("libtalaz_bedrock");
@@ -111,6 +118,15 @@ struct Mod {
     name: &'static str,
     note: &'static str,
     on: bool,
+    option: Option<Opt>,
+}
+
+#[derive(serde::Serialize)]
+struct Opt {
+    key: &'static str,
+    unit: &'static str,
+    value: f32,
+    choices: &'static [f32],
 }
 
 #[derive(serde::Serialize)]
@@ -128,7 +144,7 @@ fn state() -> State {
     State {
         versions: installed().into_iter().map(|(name, path)| (name, own.as_deref().is_some_and(|own| path.starts_with(own)))).collect(),
         email: play::email(),
-        mods: MODS.iter().map(|&(id, name, note)| Mod { id, name, note, on: ini_get(&settings, &format!("{id}.enabled")).is_some_and(|v| v != 0.0) }).collect(),
+        mods: MODS.iter().map(|&(id, name, note)| Mod { id, name, note, on: ini_get(&settings, &format!("{id}.enabled")).is_some_and(|v| v != 0.0), option: OPTIONS.iter().find(|(of, ..)| *of == id).map(|&(_, key, unit, default, choices)| Opt { key, unit, value: ini_get(&settings, key).unwrap_or(default), choices }) }).collect(),
     }
 }
 
@@ -139,10 +155,23 @@ fn set_mod(id: String, on: bool) -> Result<(), String> {
     if !MODS.iter().any(|(known, ..)| *known == id) {
         return Err("No such mod".into());
     }
+    save(&format!("{id}.enabled"), on as u8 as f32)
+}
+
+/// Changes a mod's setting for the next start of the game
+#[tauri::command]
+fn set_option(key: String, value: f32) -> Result<(), String> {
+    if !OPTIONS.iter().any(|(_, known, _, _, choices)| *known == key && choices.contains(&value)) {
+        return Err("No such setting".into());
+    }
+    save(&key, value)
+}
+
+fn save(key: &str, value: f32) -> Result<(), String> {
     let file = profile_file().ok_or("No home folder")?;
     std::fs::create_dir_all(mods_dir().ok_or("No home folder")?).map_err(|err| err.to_string())?;
     let text = std::fs::read_to_string(&file).unwrap_or_default();
-    std::fs::write(file, ini_set(&text, &format!("{id}.enabled"), on as u8 as f32)).map_err(|err| err.to_string())
+    std::fs::write(file, ini_set(&text, key, value)).map_err(|err| err.to_string())
 }
 
 const NOTES_URL: &str = "https://minecraft.wiki/api.php?action=query&prop=extracts&exintro=1&explaintext=1&exlimit=max&redirects=1&format=json";
@@ -231,7 +260,7 @@ fn play(app: tauri::AppHandle, version: String, width: u32, height: u32) -> Resu
 
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![state, play, set_mod, remove, notes, warning, open_game_folder, play::available, play::sign_in, play::sign_out, play::install])
+        .invoke_handler(tauri::generate_handler![state, play, set_mod, set_option, remove, notes, warning, open_game_folder, play::available, play::sign_in, play::sign_out, play::install])
         .run(tauri::generate_context!())
         .expect("failed to start Talaz");
 }
@@ -250,6 +279,12 @@ mod tests {
         let text = super::ini_set("zoom.enabled=0\nzoom.factor=4\n", "zoom.enabled", 1.0);
         assert_eq!(text, "zoom.factor=4\nzoom.enabled=1\n");
         assert_eq!(super::ini_get(&text, "zoom.enabled"), Some(1.0));
+    }
+
+    #[test]
+    fn a_setting_outside_its_choices_is_refused() {
+        assert!(super::set_option("fpslimit.cap".into(), 0.0).is_err());
+        assert!(super::set_option("key.menu".into(), 60.0).is_err());
     }
 
     #[test]

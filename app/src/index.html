@@ -144,7 +144,7 @@ talaz
 
 <section class="page" id="mods">
 <h2>Mods</h2>
-<p>Pick what the game starts with. Everything else is in the game, behind Right Shift.</p>
+<p>Pick what the game starts with. Right click a mod to change its setting. Everything else is in the game, behind Right Shift.</p>
 <input id="find" type="search" placeholder="Search mods" aria-label="Search mods">
 <div class="tiles" id="tiles"></div>
 </section>
@@ -259,6 +259,16 @@ function draw() {
         draw();
         try { await invoke('set_mod', { id, on: mod.on }); } catch (err) { say(String(err)); refresh(); }
       };
+      // a right click steps through the mod's setting
+      tile.oncontextmenu = async (event) => {
+        event.preventDefault();
+        const option = state.mods.find((mod) => mod.id === id).option;
+        if (!option) return;
+        option.value = option.choices[(option.choices.indexOf(option.value) + 1) % option.choices.length];
+        draw();
+        try { await invoke('set_option', { key: option.key, value: option.value }); } catch (err) { say(String(err)); refresh(); }
+      };
+      if (state.mods.find((mod) => mod.id === id).option) tile.title = 'Right click to change the setting';
       $('tiles').append(tile);
     }
   }
@@ -266,7 +276,7 @@ function draw() {
     const tile = $(`mod-${mod.id}`);
     if (!tile) continue;
     tile.setAttribute('aria-checked', mod.on);
-    tile.querySelector('em').textContent = mod.on ? 'On' : 'Off';
+    tile.querySelector('em').textContent = (mod.on ? 'On' : 'Off') + (mod.option ? ` · ${mod.option.value}${mod.option.unit}` : '');
   }
 
   // versions
