@@ -80,8 +80,8 @@ void draw(ImVec2 size, float dt) {
     ImDrawList* dl = ImGui::GetForegroundDrawList();
     ImFont* font = ImGui::GetFont();
     ImVec2 mouse = ImGui::GetIO().MousePos;
-    // the design is drawn for a 720p screen
-    float u = scale * 1.5f, time = float(ImGui::GetTime());
+    // the design is drawn for a 720p screen, and shrinks to fit a narrow window
+    float u = std::min(scale * 1.5f, size.x / 1024), time = float(ImGui::GetTime());
     dl->AddRectFilled(ImVec2(0, 0), size, IM_COL32(6, 10, 14, 189));
 
     float left = std::round((size.x - 960 * u) / 2), top = std::round(96 * u);

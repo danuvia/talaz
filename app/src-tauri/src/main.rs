@@ -12,6 +12,12 @@ fn data_root() -> Option<PathBuf> {
     }))
 }
 
+/// Talaz's own game folder: worlds, settings and the Xbox sign-in live here, apart from mcpelauncher's
+fn game_data() -> Option<PathBuf> {
+    let home = PathBuf::from(std::env::var_os("HOME")?);
+    Some(home.join(if cfg!(target_os = "macos") { "Library/Application Support/Talaz/game" } else { ".local/share/talaz/game" }))
+}
+
 // ponytail: finds the mac app or a binary on PATH, not the flatpak. Goes away once Talaz ships its own build
 fn client() -> Option<PathBuf> {
     let mac = PathBuf::from("/Applications/Minecraft Bedrock Launcher.app/Contents/MacOS/mcpelauncher-client");
@@ -58,6 +64,15 @@ fn play(version: String) -> Result<(), String> {
     // without this the Xbox sign-in offers a passkey prompt that never opens
     cmd.env("QTWEBENGINE_CHROMIUM_FLAGS", "--disable-blink-features=WebAuth");
     cmd.arg("-dg").arg(game);
+    if let Some(data) = game_data() {
+        // first start: hide mcpelauncher's own menu bar over the game
+        let settings = data.join("mcpelauncher-client-settings.txt");
+        if !settings.exists() {
+            std::fs::create_dir_all(&data).map_err(|err| err.to_string())?;
+            std::fs::write(&settings, "enable_menubar=false\n").map_err(|err| err.to_string())?;
+        }
+        cmd.arg("-dd").arg(data).args(["-ww", "1280", "-wh", "720"]);
+    }
     if let Some(mods) = mods_dir() {
         cmd.arg("-m").arg(mods);
     }
