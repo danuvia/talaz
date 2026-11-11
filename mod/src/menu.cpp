@@ -136,7 +136,7 @@ void connect(bool (*locked)(), const int* menubar) {
 }
 
 bool key(int key, int action) {
-    mods::on_key(key, action, playing() && !wanted);
+    bool eaten = mods::on_key(key, action, playing() && !wanted);
     // The menu key opens the menu in a world and not over other screens; the
     // game only holds the mouse while nothing is open
     if (action == KEY_PRESS && key == int(config::get("key.menu")) && (wanted || playing())) {
@@ -147,7 +147,7 @@ bool key(int key, int action) {
         wanted = false;
         return true;
     }
-    return wanted;
+    return wanted || eaten;
 }
 
 bool mouse_button(double x, double y, int button, int action) {

@@ -37,6 +37,7 @@ Mod list[] = {
         {"clock", "Clock", "The real time, so you know when to stop"},
         {"session", "Session", "How long you have been playing"},
         {"fpslimit", "FPS Limit", "Caps the frame rate to keep the computer cool and quiet"},
+        {"togglesprint", "Toggle Sprint", "Press Ctrl once to keep sprinting"},
 };
 
 // The mods that draw on screen, stacked down the top-left at first
@@ -76,6 +77,7 @@ const Clock::time_point started = Clock::now();
 // --- zoom -------------------------------------------------------------------
 
 std::atomic<bool> zoom_held{false};
+bool sprinting = false;
 float zoom_now = 1;  // the multiplier applied this frame, eased towards the target
 
 std::optional<float> (*try_get_fov)(void*) = nullptr;
@@ -177,6 +179,7 @@ void declare() {
     }
     config::declare("fpslimit.cap", 60);
     config::declare("key.zoom", 'C');
+    config::declare("key.sprint", 17);
     config::declare("zoom.factor", 4);
 }
 
@@ -236,14 +239,23 @@ void install_zoom() {
     patch(slot, &hook, sizeof hook);
 }
 
-void on_key(int key, int action, bool playing) {
+bool on_key(int key, int action, bool playing) {
     if (action != KEY_PRESS && action != KEY_RELEASE)
-        return;
+        return false;
     bool down = action == KEY_PRESS;
+    // Toggle Sprint: the game keeps seeing Ctrl held, because its release is
+    // kept back until the next press
+    // ponytail: Ctrl stays held for the game in chat and menus too. Let go there once the mod can send keys itself
+    if (key == int(config::get("key.sprint")) && (sprinting || (playing && enabled("togglesprint")))) {
+        if (down)
+            sprinting = !sprinting;
+        return down != sprinting;
+    }
     if (int slot = key_slot(key); slot >= 0)
         keys[slot] = down;
     if (key == int(config::get("key.zoom")))
         zoom_held = down && playing && enabled("zoom");
+    return false;
 }
 
 void on_mouse_button(int button, int action) {

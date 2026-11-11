@@ -85,6 +85,7 @@ const MODS: &[(&str, &str, &str)] = &[
     ("clock", "Clock", "The real time, so you know when to stop"),
     ("session", "Session", "How long you have been playing"),
     ("fpslimit", "FPS Limit", "Caps the frame rate to keep the computer cool and quiet"),
+    ("togglesprint", "Toggle Sprint", "Press Ctrl once to keep sprinting"),
 ];
 
 /// The one setting a mod has in the launcher: mod, key, unit, default and the values to pick from.

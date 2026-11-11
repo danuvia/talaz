@@ -29,7 +29,8 @@ void limit_fps();
 
 // Input the game sees, observed for the HUDs and Zoom. on_scroll returns true
 // when Zoom took the scroll.
-void on_key(int key, int action, bool playing);
+/// True when the game should not see the key
+bool on_key(int key, int action, bool playing);
 void on_mouse_button(int button, int action);
 bool on_scroll(double dy, bool playing);
 
