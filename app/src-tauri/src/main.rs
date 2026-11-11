@@ -533,8 +533,10 @@ fn play(app: tauri::AppHandle, version: String, width: u32, height: u32) -> Resu
     drop(lines);
     let log_app = app.clone();
     // and to logs/latest.log, which outlives the launcher's window
+    // the last game's log is kept as previous.log, so a crash is still there after starting again
     let mut file = root().and_then(|root| {
         std::fs::create_dir_all(root.join("logs")).ok()?;
+        let _ = std::fs::rename(root.join("logs/latest.log"), root.join("logs/previous.log"));
         std::fs::File::create(root.join("logs/latest.log")).ok()
     });
     std::thread::spawn(move || {
