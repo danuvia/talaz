@@ -61,14 +61,14 @@ h1 { font-size: 84px; line-height: 1; letter-spacing: -4px; margin: 10px 0 30px 
 
 /* mods: a tile fills with water when its mod is on */
 .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
-.tile { position: relative; overflow: hidden; height: 250px; padding: 22px; border: 1px solid var(--line); border-radius: 24px; background: var(--ink); text-align: left; display: flex; flex-direction: column; transition: border-color 0.3s, transform 0.3s var(--ease); }
+.tile { position: relative; overflow: hidden; height: 172px; padding: 22px; border: 1px solid var(--line); border-radius: 24px; background: var(--ink); text-align: left; display: flex; flex-direction: column; transition: border-color 0.3s, transform 0.3s var(--ease); }
 .tile:hover { transform: translateY(-3px); border-color: #2c3d49; }
 .tile[aria-checked=true] { border-color: rgba(79, 216, 196, 0.5); }
 .tile strong { position: relative; z-index: 1; font-weight: 400; font-size: 22px; letter-spacing: -0.5px; }
 .tile small { position: relative; z-index: 1; margin-top: 6px; color: var(--muted); font-size: 13px; line-height: 1.45; }
 .tile em { position: relative; z-index: 1; margin-top: auto; font-style: normal; font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); transition: color 0.3s; }
 .tile[aria-checked=true] em { color: var(--accent); }
-.tile .fill { position: absolute; left: 0; right: 0; bottom: 0; height: 46%; background: var(--water); transform: translateY(110%); transition: transform 0.9s var(--ease); }
+.tile .fill { position: absolute; left: 0; right: 0; bottom: 0; height: 34%; background: var(--water); transform: translateY(110%); transition: transform 0.9s var(--ease); }
 .tile[aria-checked=true] .fill { transform: none; }
 .tile .fill svg { position: absolute; bottom: 100%; left: 0; width: 200%; height: 14px; animation: drift 5s linear infinite; }
 
@@ -81,6 +81,8 @@ h1 { font-size: 84px; line-height: 1; letter-spacing: -4px; margin: 10px 0 30px 
 .row + .row { border-top: 1px solid var(--line); }
 .row > :first-child { flex: 1; }
 .row small { display: block; color: var(--muted); font-size: 12px; }
+.row small.note { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin: 2px 0 10px; line-height: 1.45; }
+.row:has(.note) > div:first-child { padding-top: 10px; }
 .tag { padding: 3px 10px; border-radius: 999px; background: var(--water); color: var(--accent); font-size: 11px; }
 .btn { height: 36px; padding: 0 16px; border: 1px solid var(--line); border-radius: 18px; transition: border-color 0.2s, background 0.2s, color 0.2s; }
 .btn:not(:disabled):hover { border-color: var(--accent); color: var(--accent); }
@@ -143,7 +145,7 @@ talaz
 
 <section class="page" id="versions">
 <h2>Versions</h2>
-<p>Downloaded from Google Play with the account that owns the game.</p>
+<p>Downloaded from Google Play with the account that owns the game. Notes from the Minecraft Wiki.</p>
 <div class="cols">
 <div><h3>Installed</h3><div class="list" id="installed"></div></div>
 <div><h3>Download</h3><div class="list" id="downloads"></div></div>
@@ -176,7 +178,9 @@ const { invoke } = window.__TAURI__.core, { listen } = window.__TAURI__.event;
 const $ = (id) => document.getElementById(id);
 const el = (tag, props, ...children) => { const node = Object.assign(document.createElement(tag), props); node.append(...children); return node; };
 const SIZES = ['1280x720', '1600x900', '1920x1080', '2560x1440'];
-let state = { versions: [], email: null, mods: [] }, available = null, busy = false, waiting = null;
+let state = { versions: [], email: null, mods: [] }, available = null, notes = {}, busy = false, waiting = null;
+// a version's line from the wiki, cut to two lines on screen and whole on hover
+const note = (name) => (notes[name] ? [el('small', { className: 'note', title: notes[name] }, notes[name])] : []);
 
 // pages
 const thumb = document.querySelector('nav i');
@@ -226,7 +230,8 @@ function draw() {
 
   // home
   const names = state.versions.map(([name]) => name), version = $('version');
-  const want = version.value || localStorage.getItem('version');
+  // the one known to run well, until the player picks another
+  const want = localStorage.getItem('version') ?? (names.includes(available?.recommended) ? available.recommended : version.value);
   version.replaceChildren(...names.map((name) => new Option(name, name)));
   if (names.includes(want)) version.value = want;
   version.disabled = busy || !names.length;
@@ -265,7 +270,7 @@ function draw() {
       if (!remove.classList.contains('sure')) { remove.classList.add('sure'); remove.textContent = 'Delete it?'; return; }
       run(`Minecraft ${name} was deleted`, () => invoke('remove', { version: name }));
     };
-    return el('div', { className: 'row' }, el('div', {}, name, el('small', {}, own ? 'Downloaded by Talaz' : 'From Minecraft Bedrock Launcher')), ...(own ? [remove] : []));
+    return el('div', { className: 'row' }, el('div', {}, name, el('small', {}, own ? 'Downloaded by Talaz' : 'From Minecraft Bedrock Launcher'), ...note(name)), ...(own ? [remove] : []));
   }));
   if (!names.length) $('installed').replaceChildren(el('div', { className: 'row muted' }, 'Nothing here yet'));
   if (available) {
@@ -274,7 +279,7 @@ function draw() {
     $('downloads').replaceChildren(...list.map(([code, name]) => {
       const get = el('button', { className: 'btn', textContent: 'Download', disabled: busy });
       get.onclick = () => download(code, name);
-      return el('div', { className: 'row' }, el('div', {}, name), ...(name === available.recommended ? [el('span', { className: 'tag' }, 'Recommended')] : []), get);
+      return el('div', { className: 'row' }, el('div', {}, name, ...note(name)), ...(name === available.recommended ? [el('span', { className: 'tag' }, 'Recommended')] : []), get);
     }));
   }
 }
@@ -288,7 +293,6 @@ function install(code, name) {
   return run(`Minecraft ${name} is ready`, async () => {
     await invoke('install', { code, name });
     localStorage.setItem('version', name);
-    $('version').value = '';
   });
 }
 
@@ -334,8 +338,15 @@ $('play').onclick = async () => {
 };
 
 document.fonts.ready.then(() => show('home'));
-refresh();
-invoke('available').then((list) => { available = list; draw(); }).catch((err) => $('downloads').replaceChildren(el('div', { className: 'row muted' }, String(err))));
+const ready = refresh();
+invoke('available').then(async (list) => {
+  available = list;
+  await ready;
+  draw();
+  const names = [...state.versions.map(([name]) => name), ...list.list.slice(0, 12).map(([, name]) => name), list.recommended];
+  notes = await invoke('notes', { versions: [...new Set(names)] }).catch(() => ({}));
+  draw();
+}).catch((err) => $('downloads').replaceChildren(el('div', { className: 'row muted' }, String(err))));
 </script>
 </body>
 </html>

@@ -1,6 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::{path::PathBuf, process::Command};
+use std::{collections::HashMap, path::PathBuf, process::Command};
 
 mod device;
 mod play;
@@ -71,6 +71,9 @@ const MODS: &[(&str, &str, &str)] = &[
     ("fps", "FPS", "Frames per second on screen"),
     ("cps", "CPS", "Clicks per second"),
     ("keystrokes", "Keystrokes", "Shows the keys you press"),
+    ("clock", "Clock", "The real time, so you know when to stop"),
+    ("session", "Session", "How long you have been playing"),
+    ("fpslimit", "FPS Limit", "Caps the frame rate to keep the computer cool and quiet"),
 ];
 
 /// The file the mod keeps the active profile's settings in, next to its library
@@ -131,6 +134,51 @@ fn set_mod(id: String, on: bool) -> Result<(), String> {
     std::fs::write(file, ini_set(&text, &format!("{id}.enabled"), on as u8 as f32)).map_err(|err| err.to_string())
 }
 
+const NOTES_URL: &str = "https://minecraft.wiki/api.php?action=query&prop=extracts&exintro=1&explaintext=1&exlimit=max&redirects=1&format=json";
+
+/// The wiki page about a version: 1.21.114.1 is on "Bedrock Edition 1.21.114".
+/// From 1.26 on the game goes by the year, so 1.26.60.4 is on "Bedrock Edition 26.60"
+fn wiki_title(version: &str) -> String {
+    let parts = version_key(version);
+    let named: Vec<String> = match parts[..] {
+        [1, year, drop, ..] if year >= 26 => vec![year.to_string(), drop.to_string()],
+        _ => parts.iter().take(3).map(u32::to_string).collect(),
+    };
+    format!("Bedrock Edition {}", named.join("."))
+}
+
+/// The opening lines of each page in the wiki's answer, by the title that was asked for
+fn notes_from(json: &str) -> HashMap<String, String> {
+    let value: serde_json::Value = serde_json::from_str(json).unwrap_or_default();
+    let query = &value["query"];
+    let mut notes: HashMap<String, String> = query["pages"]
+        .as_object()
+        .into_iter()
+        .flatten()
+        .filter_map(|(_, page)| Some((page["title"].as_str()?.to_string(), page["extract"].as_str().filter(|text| !text.is_empty())?.to_string())))
+        .collect();
+    for moved in query["redirects"].as_array().into_iter().flatten() {
+        if let (Some(from), Some(note)) = (moved["from"].as_str(), moved["to"].as_str().and_then(|to| notes.get(to)).cloned()) {
+            notes.insert(from.to_string(), note);
+        }
+    }
+    notes
+}
+
+/// What each version changed, in a sentence or two from the Minecraft Wiki. Versions it has no page for are left out
+#[tauri::command(async)]
+fn notes(versions: Vec<String>) -> Result<HashMap<String, String>, String> {
+    let mut out = HashMap::new();
+    // the wiki answers 20 pages at a time
+    for chunk in versions.chunks(20) {
+        let titles = chunk.iter().map(|version| wiki_title(version)).collect::<Vec<_>>().join("|");
+        let text = ureq::get(NOTES_URL).query("titles", &titles).header("user-agent", "Talaz launcher").call().map_err(|err| format!("Could not load the version notes: {err}"))?.body_mut().read_to_string().map_err(|err| err.to_string())?;
+        let found = notes_from(&text);
+        out.extend(chunk.iter().filter_map(|version| Some((version.clone(), found.get(&wiki_title(version))?.clone()))));
+    }
+    Ok(out)
+}
+
 /// Deletes a version Talaz downloaded. Versions from Minecraft Bedrock Launcher are left alone
 #[tauri::command]
 fn remove(version: String) -> Result<(), String> {
@@ -172,7 +220,7 @@ fn play(app: tauri::AppHandle, version: String, width: u32, height: u32) -> Resu
 
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![state, play, set_mod, remove, open_game_folder, play::available, play::sign_in, play::sign_out, play::install])
+        .invoke_handler(tauri::generate_handler![state, play, set_mod, remove, notes, open_game_folder, play::available, play::sign_in, play::sign_out, play::install])
         .run(tauri::generate_context!())
         .expect("failed to start Talaz");
 }
@@ -191,6 +239,24 @@ mod tests {
         let text = super::ini_set("zoom.enabled=0\nzoom.factor=4\n", "zoom.enabled", 1.0);
         assert_eq!(text, "zoom.factor=4\nzoom.enabled=1\n");
         assert_eq!(super::ini_get(&text, "zoom.enabled"), Some(1.0));
+    }
+
+    #[test]
+    fn notes_follow_redirects_and_skip_missing_pages() {
+        let json = r#"{"query":{"redirects":[{"from":"Bedrock Edition 1.2.3","to":"Bedrock Edition 1.2"}],"pages":{"-1":{"title":"Bedrock Edition 9.9.9","missing":""},"7":{"title":"Bedrock Edition 1.2","extract":"Adds bees."}}}}"#;
+        let notes = super::notes_from(json);
+        assert_eq!(notes[&super::wiki_title("1.2.3.4")], "Adds bees.");
+        assert!(!notes.contains_key("Bedrock Edition 9.9.9"));
+        assert!(super::notes_from("not json").is_empty());
+        assert_eq!(super::wiki_title("1.26.60.4"), "Bedrock Edition 26.60");
+    }
+
+    #[test]
+    #[ignore = "asks the Minecraft Wiki"]
+    fn the_wiki_knows_the_recommended_version() {
+        let notes = super::notes(vec!["1.21.114.1".into(), "1.26.60.4".into(), "0.0.0.0".into()]).unwrap();
+        assert_eq!(notes.len(), 2);
+        println!("{notes:?}");
     }
 
     #[test]

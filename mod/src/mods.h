@@ -24,6 +24,8 @@ void declare();
 // Finds the game's camera so Zoom can change the field of view. Needs the
 // game library loaded, so it runs from mod_init.
 void install_zoom();
+// Holds the frame back when FPS Limit is on. Called once per frame.
+void limit_fps();
 
 // Input the game sees, observed for the HUDs and Zoom. on_scroll returns true
 // when Zoom took the scroll.

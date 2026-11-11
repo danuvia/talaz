@@ -10,10 +10,12 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <ctime>
 #include <deque>
 #include <mutex>
 #include <optional>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "config.h"
@@ -32,10 +34,14 @@ Mod list[] = {
         {"fps", "FPS", "Frames per second on screen"},
         {"cps", "CPS", "Clicks per second"},
         {"keystrokes", "Keystrokes", "Shows the keys you press"},
+        {"clock", "Clock", "The real time, so you know when to stop"},
+        {"session", "Session", "How long you have been playing"},
+        {"fpslimit", "FPS Limit", "Caps the frame rate to keep the computer cool and quiet"},
 };
 
 // The mods that draw on screen, stacked down the top-left at first
-const char* const HUDS[] = {"fps", "cps", "keystrokes"};
+// keystrokes is the tall one, so it goes last
+const char* const HUDS[] = {"fps", "cps", "clock", "session", "keystrokes"};
 
 // --- input the HUDs watch ---------------------------------------------------
 
@@ -62,6 +68,10 @@ size_t cps[2] = {};
 int fps = 0;
 int frames = 0;
 float fps_window = 0;
+
+// --- clock and session ------------------------------------------------------
+
+const Clock::time_point started = Clock::now();
 
 // --- zoom -------------------------------------------------------------------
 
@@ -165,8 +175,24 @@ void declare() {
         config::declare(std::string(hud) + ".x", 0.008f);
         config::declare(std::string(hud) + ".y", 0.015f + 0.055f * i++);
     }
+    config::declare("fpslimit.cap", 60);
     config::declare("key.zoom", 'C');
     config::declare("zoom.factor", 4);
+}
+
+void limit_fps() {
+    static Clock::time_point next;
+    auto now = Clock::now();
+    if (!enabled("fpslimit")) {
+        next = now;
+        return;
+    }
+    next += std::chrono::duration_cast<Clock::duration>(std::chrono::duration<float>(1 / std::max(10.f, config::get("fpslimit.cap"))));
+    // a slow frame is not made up for by rushing the next ones
+    if (next < now)
+        next = now;
+    else
+        std::this_thread::sleep_until(next);
 }
 
 void install_zoom() {
@@ -263,7 +289,9 @@ void tick(float dt) {
     zoom_now += (target - zoom_now) * (1 - std::exp(-dt * 12));
 }
 
-bool hud_visible() { return enabled("fps") || enabled("cps") || enabled("keystrokes"); }
+bool hud_visible() {
+    return std::any_of(std::begin(HUDS), std::end(HUDS), [](const char* hud) { return enabled(hud); });
+}
 
 void draw_hud(ImDrawList* dl, float u, ImFont* font) {
     using namespace theme;
@@ -288,6 +316,21 @@ void draw_hud(ImDrawList* dl, float u, ImFont* font) {
     if (enabled("cps")) {
         std::snprintf(buf, sizeof buf, "%zu | %zu CPS", cps[0], cps[1]);
         label("cps", buf);
+    }
+    if (enabled("clock")) {
+        time_t now = time(nullptr);
+        tm parts{};
+        localtime_r(&now, &parts);
+        std::snprintf(buf, sizeof buf, "%02d:%02d", parts.tm_hour, parts.tm_min);
+        label("clock", buf);
+    }
+    if (enabled("session")) {
+        long s = std::chrono::duration_cast<std::chrono::seconds>(Clock::now() - started).count();
+        if (s >= 3600)
+            std::snprintf(buf, sizeof buf, "%ld:%02ld:%02ld", s / 3600, s / 60 % 60, s % 60);
+        else
+            std::snprintf(buf, sizeof buf, "%ld:%02ld", s / 60, s % 60);
+        label("session", buf);
     }
     if (enabled("keystrokes")) {
         ImVec2 o = at("keystrokes");

@@ -6,5 +6,6 @@
 - [mcpelauncher](https://github.com/minecraft-linux/mcpelauncher-manifest) runs the game. The launcher downloads its Mac build from [macos-builder](https://github.com/minecraft-linux/macos-builder) (GPL-3.0).
 - [Google-Play-API](https://github.com/minecraft-linux/Google-Play-API) (Apache-2.0): the Play store requests and the device description in `app/src-tauri/src/play.rs` and `device.rs` follow it.
 - [mcpelauncher-versiondb](https://github.com/minecraft-linux/mcpelauncher-versiondb) is where the list of game versions comes from.
+- [Minecraft Wiki](https://minecraft.wiki) (CC BY-NC-SA 3.0): the launcher shows the opening lines of its page about each version, fetched when the launcher runs.
 
 Talaz is not affiliated with Mojang or Microsoft.

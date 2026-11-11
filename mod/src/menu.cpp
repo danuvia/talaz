@@ -197,6 +197,7 @@ void frame(EGLDisplay display, EGLSurface surface) {
     dt = std::clamp(dt, 1 / 1000.f, 0.25f);
     last_frame = now;
     mods::tick(dt);
+    mods::limit_fps();
     // the HUDs show over a world being played, not over the game's screens
     if (!wanted && !(mods::hud_visible() && playing()))
         return;
