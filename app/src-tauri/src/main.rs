@@ -2,29 +2,23 @@
 
 use std::{path::PathBuf, process::Command};
 
-/// Where mcpelauncher keeps the game versions and the sign-in
-fn data_root() -> Option<PathBuf> {
-    let home = PathBuf::from(std::env::var_os("HOME")?);
-    Some(home.join(if cfg!(target_os = "macos") {
-        "Library/Application Support/mcpelauncher"
-    } else {
-        ".local/share/mcpelauncher"
-    }))
+mod device;
+mod play;
+mod runtime;
+
+fn home() -> Option<PathBuf> {
+    Some(PathBuf::from(std::env::var_os("HOME")?))
 }
 
-/// Talaz's own game folder: worlds, settings and the Xbox sign-in live here, apart from mcpelauncher's
-fn game_data() -> Option<PathBuf> {
-    let home = PathBuf::from(std::env::var_os("HOME")?);
-    Some(home.join(if cfg!(target_os = "macos") { "Library/Application Support/Talaz/game" } else { ".local/share/talaz/game" }))
+/// Everything Talaz keeps: the runtime, the game versions, the game's own data and the sign-in
+pub fn root() -> Option<PathBuf> {
+    Some(home()?.join(if cfg!(target_os = "macos") { "Library/Application Support/Talaz" } else { ".local/share/talaz" }))
 }
 
-// ponytail: finds the mac app or a binary on PATH, not the flatpak. Goes away once Talaz ships its own build
-fn client() -> Option<PathBuf> {
-    let mac = PathBuf::from("/Applications/Minecraft Bedrock Launcher.app/Contents/MacOS/mcpelauncher-client");
-    if mac.exists() {
-        return Some(mac);
-    }
-    std::env::split_paths(&std::env::var_os("PATH")?).map(|dir| dir.join("mcpelauncher-client")).find(|path| path.exists())
+/// Folders that hold game versions: Talaz's own, then mcpelauncher's so versions downloaded there still show up
+fn version_dirs() -> Vec<PathBuf> {
+    let theirs = home().map(|home| home.join(if cfg!(target_os = "macos") { "Library/Application Support/mcpelauncher" } else { ".local/share/mcpelauncher" }));
+    root().into_iter().chain(theirs).map(|dir| dir.join("versions")).collect()
 }
 
 // ponytail: the mod is loaded from the repo's build folder. Bundle it with the app for releases
@@ -38,33 +32,44 @@ fn version_key(version: &str) -> Vec<u32> {
     version.split('.').filter_map(|part| part.parse().ok()).collect()
 }
 
-/// Installed game versions, newest first
-#[tauri::command]
-fn versions() -> Vec<String> {
-    let Some(root) = data_root() else { return Vec::new() };
-    let Ok(entries) = std::fs::read_dir(root.join("versions")) else { return Vec::new() };
-    let mut found: Vec<String> = entries
-        .flatten()
-        .filter(|entry| entry.path().is_dir())
-        .filter_map(|entry| entry.file_name().into_string().ok())
-        .collect();
-    found.sort_by_key(|version| std::cmp::Reverse(version_key(version)));
+/// Installed game versions and where they are, newest first
+fn installed() -> Vec<(String, PathBuf)> {
+    let mut found: Vec<(String, PathBuf)> = Vec::new();
+    for dir in version_dirs() {
+        for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+            let Ok(name) = entry.file_name().into_string() else { continue };
+            // a .part folder is a download that did not finish
+            if entry.path().is_dir() && !name.ends_with(".part") && !found.iter().any(|(known, _)| *known == name) {
+                found.push((name, entry.path()));
+            }
+        }
+    }
+    found.sort_by_key(|(name, _)| std::cmp::Reverse(version_key(name)));
     found
 }
 
+#[derive(serde::Serialize)]
+struct State {
+    versions: Vec<String>,
+    email: Option<String>,
+}
+
 #[tauri::command]
-fn play(version: String) -> Result<(), String> {
+fn state() -> State {
+    State { versions: installed().into_iter().map(|(name, _)| name).collect(), email: play::email() }
+}
+
+#[tauri::command(async)]
+fn play(app: tauri::AppHandle, version: String) -> Result<(), String> {
     // the name comes from the page, so only take one that is installed
-    if !versions().contains(&version) {
-        return Err("That version is not installed".into());
-    }
-    let client = client().ok_or("mcpelauncher is not installed")?;
-    let game = data_root().ok_or("No home folder")?.join("versions").join(&version);
+    let (_, game) = installed().into_iter().find(|(name, _)| *name == version).ok_or("That version is not installed")?;
+    runtime::ensure(&app)?;
+    let client = runtime::tool("mcpelauncher-client").ok_or("The game runtime is missing")?;
     let mut cmd = Command::new(client);
     // without this the Xbox sign-in offers a passkey prompt that never opens
     cmd.env("QTWEBENGINE_CHROMIUM_FLAGS", "--disable-blink-features=WebAuth");
     cmd.arg("-dg").arg(game);
-    if let Some(data) = game_data() {
+    if let Some(data) = root().map(|root| root.join("game")) {
         // first start: hide mcpelauncher's own menu bar over the game
         let settings = data.join("mcpelauncher-client-settings.txt");
         if !settings.exists() {
@@ -81,7 +86,7 @@ fn play(version: String) -> Result<(), String> {
 
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![versions, play])
+        .invoke_handler(tauri::generate_handler![state, play, play::available, play::sign_in, play::sign_out, play::install])
         .run(tauri::generate_context!())
         .expect("failed to start Talaz");
 }

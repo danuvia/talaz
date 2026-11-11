@@ -18,6 +18,9 @@ select { padding: 0 16px; border: 1px solid var(--line); background: var(--ink);
 button { padding: 0 36px; border: 0; background: var(--text); color: var(--deep); font-weight: 600; font-size: 15px; cursor: pointer; }
 button:disabled { opacity: 0.5; cursor: default; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.link { height: auto; padding: 0; border-radius: 0; background: none; color: var(--accent); font-weight: 400; font-size: inherit; }
+progress { width: 320px; height: 4px; accent-color: var(--accent); }
+progress[hidden] { display: block; visibility: hidden; }
 .sea { position: absolute; left: 0; right: 0; bottom: 0; height: 120px; z-index: -1; }
 </style>
 </head>
@@ -32,34 +35,118 @@ button:disabled { opacity: 0.5; cursor: default; }
 <select id="version" aria-label="Game version"></select>
 <button id="play">Play</button>
 </div>
+<progress id="bar" hidden></progress>
 <p id="status" role="status"></p>
+<p id="account"></p>
 </main>
 <svg class="sea" aria-hidden="true" viewBox="0 0 960 120" preserveAspectRatio="none"><path d="M0 120V40c80-32 160-32 240 0s160 32 240 0 160-32 240 0 160 32 240 0v80z" fill="#4FD8C4" fill-opacity="0.22"/></svg>
 <script>
-const { invoke } = window.__TAURI__.core;
-const version = document.getElementById('version'), play = document.getElementById('play'), status = document.getElementById('status');
+const { invoke } = window.__TAURI__.core, { listen } = window.__TAURI__.event;
+const [version, play, status, bar, account] = ['version', 'play', 'status', 'bar', 'account'].map((id) => document.getElementById(id));
+let email = null, busy = false;
 
-invoke('versions').then((list) => {
-  for (const name of list) version.add(new Option(name, name));
-  const last = localStorage.getItem('version');
-  if (list.includes(last)) version.value = last;
-  if (!list.length) {
-    play.disabled = true;
-    status.textContent = 'No game version found. Download one in Minecraft Bedrock Launcher first.';
+// installed versions are picked by name, the others carry the store's code to download with
+const chosen = () => version.selectedOptions[0];
+const label = () => (play.textContent = chosen()?.dataset.code ? 'Download' : 'Play');
+version.onchange = label;
+
+function showAccount() {
+  account.replaceChildren(email ? `Google Play: ${email} ` : '');
+  if (!email) return;
+  const out = Object.assign(document.createElement('button'), { className: 'link', textContent: 'Sign out' });
+  out.onclick = async () => { await invoke('sign_out'); email = null; showAccount(); };
+  account.append(out);
+}
+
+async function refresh(pick) {
+  const state = await invoke('state');
+  email = state.email;
+  showAccount();
+  version.replaceChildren();
+  const group = (name) => version.appendChild(Object.assign(document.createElement('optgroup'), { label: name }));
+  if (state.versions.length) {
+    const installed = group('Installed');
+    for (const name of state.versions) installed.append(new Option(name, name));
   }
+  const want = pick ?? localStorage.getItem('version');
+  if (state.versions.includes(want)) version.value = want;
+  label();
+  try {
+    const { recommended, list } = await invoke('available');
+    const download = group('Download');
+    // the newest few, and always the one known to run well
+    for (const [code, name] of list.filter(([, name], i) => i < 12 || name === recommended)) {
+      if (state.versions.includes(name)) continue;
+      const option = new Option(name === recommended ? `${name} (recommended)` : name, name);
+      option.dataset.code = code;
+      download.append(option);
+    }
+    if (!state.versions.length) version.value = recommended;
+  } catch (err) {
+    if (!state.versions.length) status.textContent = String(err);
+  }
+  label();
+  play.disabled = busy || !chosen();
+}
+
+function working(on) {
+  busy = on;
+  play.disabled = version.disabled = on;
+  if (!on) bar.hidden = true;
+}
+
+listen('progress', ({ payload: [text, part] }) => {
+  status.textContent = part == null ? `${text}...` : `${text} ${Math.round(part * 100)}%`;
+  bar.hidden = false;
+  if (part == null) bar.removeAttribute('value'); else bar.value = part;
+});
+
+async function install(option) {
+  working(true);
+  try {
+    await invoke('install', { code: Number(option.dataset.code), name: option.value });
+    status.textContent = `Minecraft ${option.value} is ready`;
+    await refresh(option.value);
+  } catch (err) {
+    status.textContent = String(err);
+  }
+  working(false);
+}
+
+let waiting = null;
+listen('signed-in', ({ payload }) => {
+  const option = waiting;
+  waiting = null;
+  working(false);
+  if (payload.Err) return (status.textContent = payload.Err);
+  email = payload.Ok;
+  showAccount();
+  status.textContent = '';
+  if (option) install(option);
 });
 
 play.onclick = async () => {
-  localStorage.setItem('version', version.value);
-  play.disabled = true;
+  const option = chosen();
+  if (option.dataset.code) {
+    if (email) return install(option);
+    // Google's page opens in its own window, the download goes on once it is done
+    waiting = option;
+    working(true);
+    status.textContent = 'Sign in with the Google account that owns Minecraft';
+    return invoke('sign_in').catch((err) => { status.textContent = String(err); working(false); });
+  }
+  localStorage.setItem('version', option.value);
+  working(true);
   try {
-    await invoke('play', { version: version.value });
+    await invoke('play', { version: option.value });
     status.textContent = 'Starting the game...';
   } catch (err) {
     status.textContent = String(err);
   }
-  setTimeout(() => (play.disabled = false), 3000);
+  setTimeout(() => working(false), 3000);
 };
+
+refresh();
 </script>
 </body>
 </html>

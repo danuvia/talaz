@@ -25,7 +25,7 @@ Use `-DANDROID_ABI=x86_64` on Linux. The result is `libtalaz_bedrock.so`, which 
 
 ## Running the launcher
 
-You need Rust, and Minecraft Bedrock Launcher installed with a game version downloaded. Build the mod first.
+You need Rust. Build the mod first. On a Mac the launcher downloads the mcpelauncher runtime on first use and keeps it as its own app, so nothing else has to be installed. It signs in to Google Play in a window of its own and downloads the game the account owns. Versions already downloaded with Minecraft Bedrock Launcher show up too. On Linux, install `mcpelauncher-client` and `mcpelauncher-extract` yourself for now.
 
 ```bash
 cd app/src-tauri && cargo run
