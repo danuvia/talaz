@@ -106,6 +106,34 @@ h1 { font-size: 84px; line-height: 1; letter-spacing: -4px; margin: 10px 0 30px 
 #toast i.loose { width: 35%; animation: slide 1.2s ease-in-out infinite alternate; }
 @keyframes slide { from { transform: translateX(-100%); } to { transform: translateX(290%); } }
 @media (prefers-reduced-motion: reduce) { *, *::before { animation: none !important; transition: none !important; } }
+
+/* first-run setup: one card, three steps, over everything */
+#setup { position: fixed; inset: 0; z-index: 5; display: grid; place-items: center; background: rgba(12, 18, 23, 0.86); backdrop-filter: blur(14px); }
+#setup[hidden] { display: none; }
+#setup .card { width: 460px; padding: 34px 36px 30px; border: 1px solid var(--line); border-radius: 28px; background: var(--ink); }
+#setup .steps { display: flex; gap: 6px; margin-bottom: 26px; }
+#setup .steps i { height: 4px; flex: 1; border-radius: 2px; background: var(--line); transition: background 0.4s; }
+#setup .steps i.done { background: var(--accent); }
+#setup h3 { font-size: 26px; font-weight: 400; letter-spacing: -0.6px; }
+#setup p { margin: 8px 0 22px; color: var(--muted); line-height: 1.55; }
+#setup .step[hidden] { display: none; }
+#setup .choice { display: flex; align-items: center; justify-content: space-between; width: 100%; margin-bottom: 10px; padding: 14px 18px; border: 1px solid var(--line); border-radius: 16px; text-align: left; transition: border-color 0.2s; }
+#setup .choice:not(:disabled):hover { border-color: var(--accent); }
+#setup .choice:disabled { opacity: 0.45; cursor: default; }
+#setup .choice small { display: block; margin-top: 2px; color: var(--muted); font-size: 12px; }
+#setup .path { padding: 13px 16px; border: 1px solid var(--line); border-radius: 14px; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+#setup .actions { display: flex; justify-content: space-between; align-items: center; margin-top: 24px; }
+#setup .actions .btn { background: var(--accent); border-color: var(--accent); color: var(--deep); }
+#setup .link { color: var(--muted); font-size: 13px; }
+#setup .link:hover { color: var(--text); }
+
+/* log: the game's output, newest at the bottom */
+.logbar { display: flex; gap: 10px; margin-bottom: 12px; }
+.logbar input { flex: 1; height: 40px; padding: 0 16px; border: 1px solid var(--line); border-radius: 20px; background: var(--ink); }
+#log-lines { height: calc(100vh - 300px); margin: 0; padding: 14px 16px; overflow: auto; border: 1px solid var(--line); border-radius: 18px; background: var(--ink); color: var(--muted); font: 12px/1.6 ui-monospace, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere; -webkit-user-select: text; user-select: text; cursor: text; }
+#log-lines .err { color: #E8B45A; }
+#log-lines .times { color: var(--accent); font-weight: 400; }
+#log-state.on { color: var(--accent); }
 </style>
 </head>
 <body>
@@ -119,6 +147,7 @@ talaz
 <button data-page="home" aria-current="page">Home</button>
 <button data-page="mods">Mods</button>
 <button data-page="versions">Versions</button>
+<button data-page="log">Log</button>
 <button data-page="settings">Settings</button>
 </nav>
 <button id="chip"></button>
@@ -159,6 +188,13 @@ talaz
 </div>
 </section>
 
+<section class="page" id="log">
+<h2>Log</h2>
+<p id="log-state">What the game prints while it runs. It starts over with every game.</p>
+<div class="logbar"><input id="log-find" type="search" placeholder="Filter" aria-label="Filter the log"><button class="btn" id="log-copy">Copy</button></div>
+<pre id="log-lines" tabindex="0"></pre>
+</section>
+
 <section class="page" id="settings">
 <h2>Settings</h2>
 <p>The launcher's own. The rest of the game's settings stay in the game.</p>
@@ -170,6 +206,31 @@ talaz
 <div class="row"><div>Game folder<small>Worlds, resource packs and screenshots</small></div><button class="btn" id="folder">Open</button></div>
 </div>
 <p class="fine">Talaz 0.1.0 by Danuvia. Not affiliated with Mojang or Microsoft.</p>
+</div>
+</section>
+
+
+<section id="setup" hidden aria-label="Setup">
+<div class="card">
+<div class="steps" aria-hidden="true"><i></i><i></i><i></i></div>
+<div class="step" data-step="0">
+<h3>Welcome to Talaz</h3>
+<p>Two quick things before the first game: the account that owns Minecraft, and where your worlds should live.</p>
+<div class="actions"><span></span><button class="btn" data-next>Start</button></div>
+</div>
+<div class="step" data-step="1" hidden>
+<h3>Your account</h3>
+<p>Talaz downloads the game from the account you bought it with. You can also do this later, from Settings.</p>
+<button class="choice" id="setup-google"><span>Google<small id="setup-who">The Android version, for Mac</small></span><span aria-hidden="true">→</span></button>
+<button class="choice" disabled><span>Microsoft<small>The Windows version, coming with Talaz for Windows and Linux</small></span></button>
+<div class="actions"><button class="link" data-back>Back</button><button class="btn" data-next id="setup-account">Skip for now</button></div>
+</div>
+<div class="step" data-step="2" hidden>
+<h3>Game folder</h3>
+<p>Worlds, resource packs and screenshots go here.</p>
+<div class="path" id="setup-path"></div>
+<div class="actions"><button class="link" id="setup-change">Change folder</button><button class="btn" id="setup-done">Done</button></div>
+</div>
 </div>
 </section>
 
@@ -244,8 +305,8 @@ function draw() {
   if (names.includes(want)) version.value = want;
   version.disabled = busy || !names.length;
   warn();
-  $('play').textContent = names.length ? 'Play' : 'Get the game';
-  $('play').disabled = busy;
+  $('play').textContent = state.running ? 'Running' : names.length ? 'Play' : 'Get the game';
+  $('play').disabled = busy || state.running;
   const on = state.mods.filter((mod) => mod.on).length;
   $('fact-mods').textContent = on ? `${on} on` : 'All off';
   $('fact-size').textContent = $('size').value.replace('x', ' × ');
@@ -336,6 +397,7 @@ listen('signed-in', async ({ payload }) => {
   working(false);
   if (payload.Err) return say(payload.Err);
   say(`Signed in as ${payload.Ok}`);
+  if (!$('setup').hidden) setup(2);
   if (next) install(...next);
 });
 
@@ -359,6 +421,55 @@ async function warn() {
 }
 $('version').onchange = () => { localStorage.setItem('version', $('version').value); warn(); };
 
+// the game's output, kept to the last 3000 lines. A line that repeats the one
+// before it, apart from the time, only counts up
+const LOG_MAX = 3000;
+let logLines = [];
+const logBody = (line) => line.replace(/^\d\d:\d\d:\d\d /, '');
+function logMatch(entry) {
+  const find = $('log-find').value.toLowerCase();
+  return !find || entry.text.toLowerCase().includes(find);
+}
+function logRow(entry) {
+  const row = el('div', { className: /error|fatal|signal|exception/i.test(entry.text) ? 'err' : '' }, entry.text);
+  if (entry.n > 1) row.append(el('b', { className: 'times' }, ` ×${entry.n}`));
+  return (entry.row = row);
+}
+function logRedraw() {
+  $('log-lines').replaceChildren(...logLines.filter(logMatch).map(logRow));
+  $('log-lines').scrollTop = $('log-lines').scrollHeight;
+}
+listen('log', ({ payload }) => {
+  const box = $('log-lines'), atEnd = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
+  const rows = [];
+  let last = logLines[logLines.length - 1];
+  for (const line of payload) {
+    if (last && logBody(last.text) === logBody(line)) {
+      last.n++;
+      continue;
+    }
+    last = { text: line, n: 1 };
+    logLines.push(last);
+    rows.push(last);
+  }
+  // one redraw per batch: counted-up rows are rebuilt, new ones appended
+  if (logLines.length > LOG_MAX) logLines.splice(0, logLines.length - LOG_MAX).forEach((e) => e.row?.remove());
+  const tail = logLines[logLines.length - rows.length - 1];
+  if (tail?.row?.isConnected) tail.row.replaceWith(logRow(tail));
+  box.append(...rows.filter(logMatch).map(logRow));
+  if (atEnd) box.scrollTop = box.scrollHeight;
+});
+listen('game', ({ payload }) => {
+  state.running = payload;
+  if (payload) logLines = [], logRedraw();
+  $('log-state').textContent = payload ? 'Minecraft is running' : 'What the game prints while it runs. It starts over with every game.';
+  $('log-state').classList.toggle('on', payload);
+  draw();
+  if (!payload) say('Minecraft closed');
+});
+$('log-find').oninput = logRedraw;
+$('log-copy').onclick = () => navigator.clipboard.writeText(logLines.filter(logMatch).map((e) => (e.n > 1 ? `${e.text} ×${e.n}` : e.text)).join('\n')).then(() => say('Log copied'), (err) => say(String(err)));
+
 $('play').onclick = async () => {
   const version = $('version').value;
   if (!version) return show('versions');
@@ -370,7 +481,12 @@ $('play').onclick = async () => {
 };
 
 document.fonts.ready.then(() => show('home'));
-const ready = refresh();
+const ready = refresh().then(() => {
+  if (state.set_up) return;
+  setupFolder = state.game_folder;
+  $('setup').hidden = false;
+  setup(0);
+});
 invoke('available').then(async (list) => {
   available = list;
   await ready;
@@ -379,6 +495,30 @@ invoke('available').then(async (list) => {
   notes = await invoke('notes', { versions: [...new Set(names)] }).catch(() => ({}));
   draw();
 }).catch((err) => $('downloads').replaceChildren(el('div', { className: 'row muted' }, String(err))));
+
+
+// first-run setup: shown until a game folder has been picked
+let setupStep = 0, setupFolder = '';
+function setup(step) {
+  setupStep = step;
+  document.querySelectorAll('#setup .step').forEach((el) => (el.hidden = Number(el.dataset.step) !== step));
+  document.querySelectorAll('#setup .steps i').forEach((el, i) => el.classList.toggle('done', i <= step));
+  $('setup-who').textContent = state.email ? `Signed in as ${state.email}` : 'The Android version, for Mac';
+  $('setup-account').textContent = state.email ? 'Next' : 'Skip for now';
+  $('setup-path').textContent = setupFolder;
+}
+document.querySelectorAll('#setup [data-next]').forEach((b) => (b.onclick = () => setup(setupStep + 1)));
+document.querySelectorAll('#setup [data-back]').forEach((b) => (b.onclick = () => setup(setupStep - 1)));
+$('setup-google').onclick = () => (state.email ? setup(2) : signIn());
+$('setup-change').onclick = async () => {
+  const picked = await invoke('pick_folder').catch((err) => say(String(err)));
+  if (picked) setup(2, (setupFolder = picked));
+};
+$('setup-done').onclick = async () => {
+  try { await invoke('finish_setup', { folder: setupFolder }); } catch (err) { return say(String(err)); }
+  $('setup').hidden = true;
+  refresh();
+};
 
 // The water in a mod tile is drawn every frame: a spring moves its level, so it
 // sloshes and settles, and turning a mod on sends a wave in from the right
@@ -428,7 +568,7 @@ requestAnimationFrame(flow);
 let drag = null;
 const win = window.__TAURI__.window.getCurrentWindow();
 document.addEventListener('mousedown', async (event) => {
-  if (event.button !== 0 || event.target.closest('button, select, input, a, .tile, .row')) return;
+  if (event.button !== 0 || event.target.closest('button, select, input, a, pre, .tile, .row')) return;
   const start = { x: event.screenX, y: event.screenY };
   drag = start;
   const [pos, scale] = await Promise.all([win.outerPosition(), win.scaleFactor()]);
