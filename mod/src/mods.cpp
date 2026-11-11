@@ -265,7 +265,7 @@ std::atomic<bool> jump_pressed{false};
 float sway_roll = 0, sway_pitch = 0;  // degrees, what is drawn
 float roll_build = 0;                 // -1 to 1, Camera Overhaul's turning roll target
 float jump_speed = 0, jump_height = 0, jump_tick = 0;  // blocks per tick, blocks, seconds
-bool strafed = false;
+bool strafed = false, jump_queued = false;
 
 bool sway_active() {
     return enabled("camerasway") && (std::abs(sway_roll) > 0.01f || std::abs(sway_pitch) > 0.01f);
@@ -291,13 +291,20 @@ void sway_tick(float dt, bool jumped, float turned_px) {
     sway_roll = on ? eased * config::get("camerasway.tilt") * (roll_build < 0 ? -1.f : 1.f) : 0;
 
     // the jump: Minecraft's 0.42 blocks a tick up, gravity 0.08 a tick and drag 0.98
-    if (jumped && on && jump_height <= 0)
-        jump_speed = 0.42f, jump_height = 0.0001f;
+    // a press counts on the ground or on the way down, the game taking it as soon as
+    // the player lands; held, the game jumps again on every landing, and so does this
+    if (jumped && on && (jump_height <= 0 || jump_speed < 0))
+        jump_queued = true;
+    if (jump_height <= 0 && on && (jump_queued || keys[4]))
+        jump_speed = 0.42f, jump_height = 0.0001f, jump_queued = false, jump_tick = 0;
     for (jump_tick += dt; jump_height > 0 && jump_tick >= 0.05f; jump_tick -= 0.05f) {
         jump_height += jump_speed;
         jump_speed = (jump_speed - 0.08f) * 0.98f;
+        // landing with the key held or a press waiting goes straight into the next jump
         if (jump_height <= 0)
             jump_height = 0, jump_speed = 0;
+        if (jump_height <= 0 && on && (jump_queued || keys[4]))
+            jump_speed = 0.42f, jump_height = 0.0001f, jump_queued = false;
     }
     if (jump_height <= 0)
         jump_tick = 0;
