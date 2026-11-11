@@ -293,6 +293,153 @@ fn faster_graphics() -> Result<(), String> {
     std::fs::write(file, options_set(&text, FASTER)).map_err(|err| err.to_string())
 }
 
+// The resource pack that lays out the mod's title screen. Its start screen is made
+// from the game's own at every start, so the game's screen stays one click away and
+// none of Mojang's files ship with Talaz
+const PACK: &[(&str, &[u8])] = &[
+    ("manifest.json", include_bytes!("../../../mod/pack/manifest.json")),
+    ("textures/ui/talaz/clear.png", include_bytes!("../../../mod/pack/textures/ui/talaz/clear.png")),
+    ("textures/ui/talaz/white.png", include_bytes!("../../../mod/pack/textures/ui/talaz/white.png")),
+];
+
+// name, the game's button, x, y, w, h as fractions of the screen; the same spots as mod/src/title.cpp
+const TITLE_BUTTONS: &[(&str, &str, f64, f64, f64, f64)] = &[
+    ("play", "button.menu_play", 0.07, 0.47, 0.27, 0.08),
+    ("servers", "button.menu_servers", 0.07, 0.57, 0.27, 0.065),
+    ("realms", "button.menu_realms", 0.07, 0.65, 0.27, 0.065),
+    ("settings", "button.menu_settings", 0.07, 0.73, 0.13, 0.065),
+    ("profile", "button.menu_profile", 0.74, 0.88, 0.115, 0.065),
+    ("wardrobe", "button.to_profile_screen", 0.865, 0.88, 0.115, 0.065),
+    ("inbox", "button.menu_inbox", 0.905, 0.03, 0.035, 0.06),
+    ("quit", "button.menu_exit", 0.945, 0.03, 0.035, 0.06),
+];
+
+/// The game's UI files allow comments and trailing commas, which JSON doesn't
+fn plain_json(text: &str) -> String {
+    let (mut out, mut chars) = (String::with_capacity(text.len()), text.chars().peekable());
+    while let Some(c) = chars.next() {
+        match c {
+            '"' => {
+                out.push(c);
+                while let Some(c) = chars.next() {
+                    out.push(c);
+                    if c == '\\' {
+                        out.extend(chars.next());
+                    } else if c == '"' {
+                        break;
+                    }
+                }
+            }
+            '/' if chars.peek() == Some(&'/') => {
+                while chars.next_if(|&c| c != '\n').is_some() {}
+            }
+            '/' if chars.peek() == Some(&'*') => {
+                chars.next();
+                let mut last = ' ';
+                for c in chars.by_ref() {
+                    if last == '*' && c == '/' {
+                        break;
+                    }
+                    last = c;
+                }
+            }
+            ']' | '}' => {
+                // drop a comma left before the closing bracket
+                let trimmed = out.trim_end().len();
+                if out[..trimmed].ends_with(',') {
+                    out.truncate(trimmed - 1);
+                }
+                out.push(c);
+            }
+            _ => out.push(c),
+        }
+    }
+    out
+}
+
+/// Talaz's start screen, with the game's own behind a switch in the corner
+fn start_screen(vanilla: &str) -> Option<String> {
+    use serde_json::{json, Value};
+    let parsed: Value = serde_json::from_str(&plain_json(vanilla)).ok()?;
+    let mut theirs = parsed.get("start_screen_content")?.get("controls")?.as_array()?.clone();
+    let pct = |v: f64| format!("{:.2}%", v * 100.0);
+    let place = |x: f64, y: f64, w: f64, h: f64| json!({"anchor_from": "top_left", "anchor_to": "top_left", "size": [pct(w), pct(h)], "offset": [pct(x), pct(y)]});
+    // 2px marks the mod looks for, one colour on each screen; a dialog over the middle hides ours
+    let mark = |name: &str, rgb: [f64; 3], x: &str, y: &str| {
+        json!({name: {"type": "image", "texture": "textures/ui/talaz/white", "color": rgb.map(|c| c / 255.0), "size": [2, 2],
+            "anchor_from": "top_left", "anchor_to": "top_left", "offset": [x, y], "layer": 100}})
+    };
+    let clear = "textures/ui/talaz/clear";
+    let mut ours = vec![mark("talaz_mark", [1.0, 254.0, 3.0], "0%", "0%"), mark("talaz_mark_middle", [1.0, 254.0, 3.0], "50%", "56%")];
+    for &(name, target, x, y, w, h) in TITLE_BUTTONS {
+        let mut button = place(x, y, w, h);
+        let fields = json!({"$pressed_button_name": target, "$button_text": "", "$default_button_texture": clear, "$hover_button_texture": clear,
+            "$pressed_button_texture": clear, "$locked_button_texture": clear, "$border_visible": false});
+        button.as_object_mut()?.extend(fields.as_object()?.clone());
+        ours.push(json!({format!("talaz_{name}@common_buttons.light_text_button"): button}));
+    }
+    theirs.push(mark("talaz_vanilla_mark", [3.0, 1.0, 254.0], "0%", "0%"));
+    // a radio pair switches the two screens: the way to the game's sits in Talaz's top row, the way back in its corner.
+    // The group starts on the second toggle, Talaz's screen; forcing indexes made 1.21.114 press the screen's buttons by itself
+    let switch = |name: &str, index: u32, x: f64| {
+        let mut toggle = place(x, 0.03, 0.035, 0.06);
+        let fields = json!({"type": "toggle", "layer": 50, "radio_toggle_group": true, "toggle_name": "talaz_screen",
+            "toggle_group_default_selected": 1, "toggle_default_state": index == 0, "checked_control": "on", "unchecked_control": "off",
+            "checked_hover_control": "on", "unchecked_hover_control": "off", "controls": [{"on": {"type": "panel"}}, {"off": {"type": "panel"}}],
+            "button_mappings": [{"from_button_id": "button.menu_select", "to_button_id": "button.menu_select", "mapping_type": "pressed"},
+                {"from_button_id": "button.menu_ok", "to_button_id": "button.menu_ok", "mapping_type": "focused"}]});
+        toggle.as_object_mut().map(|o| o.extend(fields.as_object().cloned().unwrap_or_default()));
+        json!({name: toggle})
+    };
+    ours.push(switch("talaz_to_vanilla", 1, 0.865));
+    theirs.push(switch("talaz_to_talaz", 0, 0.945));
+    let shown_when = |on: bool| json!([{"binding_type": "view", "source_control_name": "talaz_to_vanilla",
+        "source_property_name": if on { "#toggle_state" } else { "(not #toggle_state)" }, "target_property_name": "#visible"}]);
+    let ui = json!({"namespace": "start", "start_screen_content": {"controls": [
+        {"talaz_screen": {"type": "panel", "bindings": shown_when(false), "controls": ours}},
+        {"vanilla_screen": {"type": "panel", "bindings": shown_when(true), "controls": theirs}},
+    ]}});
+    serde_json::to_string(&ui).ok()
+}
+
+/// Puts the pack in the game's folder and turns it on for everything, first in the list
+fn install_pack(game: &std::path::Path, version: &std::path::Path) -> std::io::Result<()> {
+    let mojang = game.join("games/com.mojang");
+    let dir = mojang.join("resource_packs/talaz");
+    let screen = ["assets/assets/resource_packs/vanilla/ui/start_screen.json", "assets/resource_packs/vanilla/ui/start_screen.json"]
+        .iter()
+        .find_map(|path| std::fs::read_to_string(version.join(path)).ok())
+        .and_then(|vanilla| start_screen(&vanilla));
+    let Some(screen) = screen else {
+        // without a start screen of our own the game keeps its own; a stale one could miss new buttons
+        let _ = std::fs::remove_file(dir.join("ui/start_screen.json"));
+        return Ok(());
+    };
+    let files = PACK.iter().map(|&(name, bytes)| (name, bytes.to_vec())).chain([("ui/start_screen.json", screen.into_bytes())]);
+    for (name, bytes) in files {
+        let path = dir.join(name);
+        std::fs::create_dir_all(path.parent().unwrap_or(&dir))?;
+        if std::fs::read(&path).ok() != Some(bytes.clone()) {
+            std::fs::write(&path, bytes)?;
+        }
+    }
+    let manifest = String::from_utf8_lossy(PACK[0].1);
+    let uuid = manifest.split("\"uuid\"").nth(1).and_then(|rest| rest.split('"').nth(1)).unwrap_or_default();
+    let list = mojang.join("minecraftpe/global_resource_packs.json");
+    let current = std::fs::read_to_string(&list).unwrap_or_default();
+    if uuid.is_empty() || current.contains(uuid) {
+        return Ok(());
+    }
+    let entry = format!(r#"{{"pack_id":"{uuid}","version":[1,0,0]}}"#);
+    let updated = match current.trim().strip_prefix('[') {
+        Some(rest) if rest.trim_start().starts_with(']') => format!("[{entry}]"),
+        Some(rest) => format!("[{entry},{rest}"),
+        None => format!("[{entry}]"),
+    };
+    std::fs::create_dir_all(list.parent().unwrap_or(&mojang))?;
+    std::fs::write(list, updated)
+}
+
 /// Asks for a folder with the system's own picker. Nothing when the user cancels
 #[tauri::command(async)]
 fn pick_folder() -> Result<Option<String>, String> {
@@ -336,7 +483,7 @@ fn play(app: tauri::AppHandle, version: String, width: u32, height: u32) -> Resu
     let mut cmd = Command::new(client);
     // without this the Xbox sign-in offers a passkey prompt that never opens
     cmd.env("QTWEBENGINE_CHROMIUM_FLAGS", "--disable-blink-features=WebAuth");
-    cmd.arg("-dg").arg(game);
+    cmd.arg("-dg").arg(&game);
     if let Some(data) = game_dir() {
         // first start: hide mcpelauncher's own menu bar over the game
         let settings = data.join("mcpelauncher-client-settings.txt");
@@ -344,6 +491,8 @@ fn play(app: tauri::AppHandle, version: String, width: u32, height: u32) -> Resu
             std::fs::create_dir_all(&data).map_err(|err| err.to_string())?;
             std::fs::write(&settings, "enable_menubar=false\n").map_err(|err| err.to_string())?;
         }
+        // without the pack the game shows its own title screen, so a failure here is not worth stopping for
+        let _ = install_pack(&data, &game);
         cmd.arg("-dd").arg(data).arg("-ww").arg(width.clamp(640, 7680).to_string()).arg("-wh").arg(height.clamp(360, 4320).to_string());
     }
     cmd.arg("-m").arg(place_mod()?);
@@ -405,6 +554,30 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    #[ignore = "needs 1.21.114.1 installed through mcpelauncher"]
+    fn the_installed_start_screen_turns_into_ours() {
+        let file = super::home().unwrap().join("Library/Application Support/mcpelauncher/versions/1.21.114.1/assets/assets/resource_packs/vanilla/ui/start_screen.json");
+        assert!(super::start_screen(&std::fs::read_to_string(file).unwrap()).is_some());
+    }
+
+    #[test]
+    #[ignore = "writes the pack into the real game folder"]
+    fn install_the_pack_for_a_look() {
+        let version = super::home().unwrap().join("Library/Application Support/mcpelauncher/versions/1.21.114.1");
+        super::install_pack(&super::game_dir().unwrap(), &version).unwrap();
+    }
+
+    #[test]
+    fn the_games_ui_files_read_as_json() {
+        let text = "{ // a comment\n \"a\": [1, 2,], /* more */ \"b\": \"// not a comment\", }";
+        let value: serde_json::Value = serde_json::from_str(&super::plain_json(text)).unwrap();
+        assert_eq!(value["a"][1], 2);
+        assert_eq!(value["b"], "// not a comment");
+        let screen = super::start_screen("{\"start_screen_content\": {\"controls\": [{\"x\": {}},]}}").unwrap();
+        assert!(screen.contains("talaz_play") && screen.contains("vanilla_screen"));
+    }
+
     #[test]
     #[ignore = "writes into the real Talaz folder"]
     fn the_mod_is_placed() {

@@ -14,6 +14,7 @@
 #include "imgui_impl_opengl3.h"
 #include "mods.h"
 #include "theme.h"
+#include "title.h"
 
 EMBED(font_regular, FONT_DIR "/Poppins-Regular.ttf")
 
@@ -35,6 +36,8 @@ float width = 0, height = 0, scale = 0;
 float cursor_x = 0, cursor_y = 0;
 bool relative_mouse = false;
 std::chrono::steady_clock::time_point last_frame;
+// Talaz's title screen is up, seen in the last frame, and a click on a button only the mod handles
+std::atomic<bool> on_title{false}, title_click{false};
 // The slider being dragged on a settings page
 const mods::Setting* dragging = nullptr;
 // The mod whose settings page is open, none for the grid of tiles
@@ -67,6 +70,8 @@ void load_fonts() {
     config.FontDataOwnedByAtlas = false;
     Asset font = ASSET(font_regular);
     io.Fonts->AddFontFromMemoryTTF((void*)font.data, int(font.size), 24 * scale, &config);
+    // the title screen's wordmark, drawn large, gets a size of its own so it stays sharp
+    io.Fonts->AddFontFromMemoryTTF((void*)font.data, int(font.size), 108 * scale, &config);
     ImGui_ImplOpenGL3_DestroyFontsTexture();
     ImGui_ImplOpenGL3_CreateFontsTexture();
 }
@@ -311,6 +316,12 @@ bool key(int key, int action) {
 bool mouse_button(double x, double y, int button, int action) {
     if (!wanted)
         mods::on_mouse_button(button, action);
+    // the title screen's Mods button has no game button under it, so the mod takes its clicks
+    if (!wanted && on_title && button == 1 && title::owns(ImVec2(float(x), window_y(y)), ImVec2(width, height))) {
+        if (action == BUTTON_PRESS)
+            title_click = true;
+        return true;
+    }
     if (!wanted || !ready)
         return wanted;
     // The launcher numbers buttons from 1, left first
@@ -359,8 +370,10 @@ void frame(EGLDisplay display, EGLSurface surface) {
     mods::tick(dt);
     step_water(dt);
     mods::limit_fps();
-    // the HUDs show over a world being played, not over the game's screens
-    if (!wanted && !((mods::hud_visible() || mods::effects_visible()) && playing()))
+    // the HUDs show over a world being played, not over the game's screens; off a
+    // world, the frame is looked at for the title screen's mark
+    bool hud = (mods::hud_visible() || mods::effects_visible()) && playing();
+    if (!wanted && !hud && playing())
         return;
 
     EGLint w = 0, h = 0;
@@ -383,6 +396,10 @@ void frame(EGLDisplay display, EGLSurface surface) {
         load_fonts();
     }
 
+    on_title = !playing() && title::showing();
+    if (!wanted && !hud && !on_title)
+        return;
+
     ImGuiIO& io = ImGui::GetIO();
     io.DisplaySize = size;
     io.DeltaTime = dt;
@@ -392,9 +409,11 @@ void frame(EGLDisplay display, EGLSurface surface) {
     ImGui::NewFrame();
     if (playing())
         mods::draw_effects(ImGui::GetBackgroundDrawList());
+    if (on_title && !wanted && title::draw(ImGui::GetBackgroundDrawList(), size, ImVec2(cursor_x, cursor_y), title_click.exchange(false), float(ImGui::GetTime())))
+        wanted = true;
     if (wanted)
         draw(size, dt);
-    else
+    else if (playing())
         mods::draw_hud(ImGui::GetForegroundDrawList(), scale * 1.5f, ImGui::GetFont());
     ImGui::Render();
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());

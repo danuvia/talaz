@@ -61,6 +61,7 @@
     X(PFNGLBINDATTRIBLOCATIONPROC, glBindAttribLocation) \
     X(PFNGLUNIFORM1FPROC, glUniform1f) \
     X(PFNGLDRAWARRAYSPROC, glDrawArrays) \
+    X(PFNGLREADPIXELSPROC, glReadPixels) \
     X(PFNGLUNIFORM2FPROC, glUniform2f) \
     X(PFNGLCOLORMASKPROC, glColorMask) \
     X(PFNGLGETBOOLEANVPROC, glGetBooleanv) \
@@ -128,6 +129,7 @@ bool load();
 #define glBindAttribLocation tc_glBindAttribLocation
 #define glUniform1f tc_glUniform1f
 #define glDrawArrays tc_glDrawArrays
+#define glReadPixels tc_glReadPixels
 #define glUniform2f tc_glUniform2f
 #define glColorMask tc_glColorMask
 #define glGetBooleanv tc_glGetBooleanv

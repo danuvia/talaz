@@ -18,6 +18,7 @@ add_library(talaz_bedrock SHARED
         src/main.cpp
         src/menu.cpp
         src/mods.cpp
+        src/title.cpp
         src/config.cpp
         src/gl.cpp
         ${imgui_SOURCE_DIR}/imgui.cpp

@@ -1,0 +1,29 @@
+{
+  "format_version": 2,
+  "header": {
+    "name": "Talaz",
+    "description": "Talaz's title screen",
+    "uuid": "80fac78d-ad61-4530-b3fc-2f4ce06e4f17",
+    "version": [
+      1,
+      0,
+      0
+    ],
+    "min_engine_version": [
+      1,
+      21,
+      0
+    ]
+  },
+  "modules": [
+    {
+      "type": "resources",
+      "uuid": "56c97293-4f74-4b69-8069-6693b873e73d",
+      "version": [
+        1,
+        0,
+        0
+      ]
+    }
+  ]
+}
