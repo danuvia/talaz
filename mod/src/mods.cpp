@@ -312,7 +312,9 @@ void sway_tick(float dt, bool jumped, float turned_px) {
     float target = on ? jump_speed * config::get("camerasway.jump") : 0;
     if (std::abs(target) < 0.4f)
         target = 0;
-    sway_pitch = damp(sway_pitch, target, 0.0004f, dt);
+    // followed over about a fifth of a second, so a jump started on the way down
+    // swings from looking down to looking up instead of snapping
+    sway_pitch = damp(sway_pitch, target, 0.04f, dt);
 }
 
 void sway_world(GLint vp[4]) {
