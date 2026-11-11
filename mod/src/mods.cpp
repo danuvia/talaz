@@ -255,27 +255,57 @@ void camera_blur(GLint vp[4]) {
     glDrawArrays(GL_TRIANGLES, 0, 3);
 }
 
-// Camera Sway, like OneClient's Camera Overhaul: the world tilts as the player
-// strafes and kicks up on a jump, then springs back. The finished world is turned
-// and shifted a few degrees, which at these angles looks like turning the camera,
-// and drawn a little larger so its edges never show. The hand and HUD stay put
-// ponytail: driven by the keys, not the player's real motion, so a jump in the air or water kicks too. Read the player's velocity once the mod finds it
+// Camera Sway, after Mirsario's Camera Overhaul (GPL-3.0), which OneClient ships:
+// turning the camera rolls it a little, the roll building up while it turns and
+// fading by itself; starting to strafe gives it a short nudge; a jump tilts it
+// with the player's vertical speed. The finished world is turned and shifted,
+// which at these angles looks like turning the camera, and drawn a little larger
+// so its edges never show. The hand and HUD stay put
+// ponytail: the jump is simulated from the key with Minecraft's jump speed and gravity, so a jump in water or in the air tilts too. Read the player's velocity once the mod finds it
 std::atomic<bool> jump_pressed{false};
-float sway_roll = 0, sway_roll_v = 0, sway_pitch = 0, sway_pitch_v = 0;  // degrees
+float sway_roll = 0, sway_pitch = 0;  // degrees, what is drawn
+float roll_build = 0;                 // -1 to 1, Camera Overhaul's turning roll target
+float jump_speed = 0, jump_height = 0, jump_tick = 0;  // blocks per tick, blocks, seconds
+bool strafed = false;
 
 bool sway_active() {
     return enabled("camerasway") && (std::abs(sway_roll) > 0.01f || std::abs(sway_pitch) > 0.01f);
 }
 
-void sway_tick(float dt, bool jumped) {
-    float roll_to = enabled("camerasway") ? (float(keys[3]) - float(keys[1])) * config::get("camerasway.tilt") : 0;
-    if (jumped && enabled("camerasway"))
-        sway_pitch_v += config::get("camerasway.jump") * 14;
-    // springs: stiff enough to settle in about half a second, damped so they don't wobble
-    sway_roll_v += ((roll_to - sway_roll) * 40 - sway_roll_v * 11) * dt;
-    sway_roll += sway_roll_v * dt;
-    sway_pitch_v += (-sway_pitch * 60 - sway_pitch_v * 10) * dt;
-    sway_pitch += sway_pitch_v * dt;
+// Camera Overhaul's damp: move toward the target by 1 - smoothing^(2 dt)
+float damp(float from, float to, float smoothing, float dt) {
+    return from + (to - from) * (1 - std::pow(smoothing * smoothing, dt));
+}
+
+void sway_tick(float dt, bool jumped, float turned_px) {
+    bool on = enabled("camerasway");
+    // turning roll: the turn adds up, then decays
+    // ponytail: a pixel of mouse motion is taken as 0.15 degrees of turn
+    roll_build = damp(roll_build, 0, 0.0825f, dt);
+    roll_build = std::clamp(roll_build + (on ? -turned_px * 0.15f * 0.0048f : 0), -1.f, 1.f);
+    // starting to strafe nudges it the same way
+    bool strafing = keys[1] != keys[3];
+    if (on && strafing && !strafed)
+        roll_build = std::clamp(roll_build + (keys[3] ? -0.35f : 0.35f), -1.f, 1.f);
+    strafed = strafing;
+    float x = std::abs(roll_build), eased = x < 0.5f ? 4 * x * x * x : 1 - std::pow(-2 * x + 2, 3.f) / 2;
+    sway_roll = on ? eased * config::get("camerasway.tilt") * (roll_build < 0 ? -1.f : 1.f) : 0;
+
+    // the jump: Minecraft's 0.42 blocks a tick up, gravity 0.08 a tick and drag 0.98
+    if (jumped && on && jump_height <= 0)
+        jump_speed = 0.42f, jump_height = 0.0001f;
+    for (jump_tick += dt; jump_height > 0 && jump_tick >= 0.05f; jump_tick -= 0.05f) {
+        jump_height += jump_speed;
+        jump_speed = (jump_speed - 0.08f) * 0.98f;
+        if (jump_height <= 0)
+            jump_height = 0, jump_speed = 0;
+    }
+    if (jump_height <= 0)
+        jump_tick = 0;
+    float target = on ? jump_speed * config::get("camerasway.jump") : 0;
+    if (std::abs(target) < 0.4f)
+        target = 0;
+    sway_pitch = damp(sway_pitch, target, 0.0004f, dt);
 }
 
 void sway_world(GLint vp[4]) {
@@ -308,7 +338,9 @@ void sway_world(GLint vp[4]) {
     }
     float aspect = float(vp[2]) / float(vp[3]), roll = sway_roll * 3.14159265f / 180;
     // a pitch of a degrees moves the picture by tan(a) over tan(fov / 2) of half its height
-    float shift = -0.5f * std::tan(sway_pitch * 3.14159265f / 180) / std::tan(last_fov * 3.14159265f / 360);
+    float fov = last_fov > 30 && last_fov < 150 ? last_fov : 70;
+    // a positive pitch looks up, so the picture slides down
+    float shift = std::clamp(0.5f * std::tan(sway_pitch * 3.14159265f / 180) / std::tan(fov * 3.14159265f / 360), -0.06f, 0.06f);
     float grow = std::abs(std::cos(roll)) + std::abs(std::sin(roll)) * aspect + 2 * std::abs(shift);
     glBindTexture(GL_TEXTURE_2D, frame);
     glCopyTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, vp[0], vp[1], vp[2], vp[3], 0);
@@ -584,8 +616,8 @@ const Setting SETTINGS[] = {
         {"motionblur", "Follow the camera", "motionblur.camera"},
         {"motionblur", "Amount", "motionblur.amount", "%", 10, 90, 5},
         {"motionblur", "Samples", "motionblur.samples", "", 4, 32, 2},
-        {"camerasway", "Strafe tilt", "camerasway.tilt", "\u00b0", 0, 6, 0.5f},
-        {"camerasway", "Jump kick", "camerasway.jump", "\u00b0", 0, 6, 0.5f},
+        {"camerasway", "Turn tilt", "camerasway.tilt", "\u00b0", 0, 4, 0.25f},
+        {"camerasway", "Jump tilt", "camerasway.jump", "", 0, 6, 0.5f},
         {"clock", "24-hour clock", "clock.24h"},
         {"keystrokes", "Mouse buttons", "keystrokes.mouse"},
         {"keystrokes", "Space bar", "keystrokes.space"},
@@ -635,8 +667,8 @@ void declare() {
     config::declare("zoom.factor", 4);
     config::declare("zoom.smooth", 1);
     config::declare("motionblur.camera", 1);
-    config::declare("camerasway.tilt", 2);
-    config::declare("camerasway.jump", 2);
+    config::declare("camerasway.tilt", 1.25f);
+    config::declare("camerasway.jump", 2.5f);
     config::declare("motionblur.samples", 12);
     config::declare("clock.24h", 1);
     config::declare("keystrokes.mouse", 1);
@@ -773,11 +805,13 @@ void tick(float dt) {
     // a new frame may blur again; the last frame keeps amount of itself per 60th of a
     // second, like the Java mods, so the trail is as long at 200 fps as at 60
     blurred_this_frame = false;
-    sway_tick(dt, jump_pressed.exchange(false));
+
     // the turn since the last frame, scaled to a 60th of a second so the blur is as
     // long at any frame rate
-    look_vx = look_x.exchange(0) / std::max(dt * 60, 0.1f);
+    float turned = look_x.exchange(0);
+    look_vx = turned / std::max(dt * 60, 0.1f);
     look_vy = look_y.exchange(0) / std::max(dt * 60, 0.1f);
+    sway_tick(dt, jump_pressed.exchange(false), turned);
     blur_keep = enabled("motionblur") ? std::pow(std::clamp(config::get("motionblur.amount") / 100, 0.f, 0.95f), dt * 60) : 0;
     float target = zoom_held ? 1 / config::get("zoom.factor") : 1;
     zoom_now = config::get("zoom.smooth") != 0 ? zoom_now + (target - zoom_now) * (1 - std::exp(-dt * 12)) : target;

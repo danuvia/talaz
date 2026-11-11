@@ -534,17 +534,19 @@ let lastFrame = performance.now();
 function flow(now) {
   const dt = Math.min((now - lastFrame) / 1000, 0.05), t = now / 1000;
   lastFrame = now;
-  if (!$('mods').classList.contains('on')) return requestAnimationFrame(flow);
+  // the water keeps moving while the Mods page is away, only the drawing waits
+  const shown = $('mods').classList.contains('on');
   for (const tile of document.querySelectorAll('.tile')) {
     const on = tile.getAttribute('aria-checked') === 'true', svg = tile.querySelector('.water');
     if (!waters.has(tile)) waters.set(tile, { cover: 1, level: on ? 0.34 : -0.2, vel: 0, seed: Math.random() * 9 });
     const w = waters.get(tile), W = tile.clientWidth, H = tile.clientHeight;
-    if (tile.hidden || !W) continue;
+    if (shown && (tile.hidden || !W)) continue;
     if (w.cover < 1) w.cover = Math.min(1, w.cover + dt / 0.45);
     const target = !on ? -0.2 : w.cover < 1 ? 1 : 0.34;
     w.vel += ((target - w.level) * 60 - w.vel * 8) * dt;
     w.level += w.vel * dt;
     const path = svg.firstChild;
+    if (!shown) continue;
     if (!on && w.level < -0.08) { path.removeAttribute('d'); continue; }
     svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
     // a calm surface ripples a little; a moving one swells with its speed

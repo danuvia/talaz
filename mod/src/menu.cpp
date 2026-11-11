@@ -166,6 +166,26 @@ void draw_page(ImDrawList* dl, mods::Mod& m, float left, float top, float u) {
         dl->AddText(font, 13 * u, ImVec2(left, pb.y + 14 * u), MUTED, "This mod has nothing to set besides on and off.");
 }
 
+// The water of the launcher's tiles: a spring moves the level so it sloshes and
+// settles, and turning a mod on sends a wave in from the right. It moves every
+// frame, menu open or not, so leaving the menu mid-wave doesn't freeze it
+void step_water(float dt) {
+    for (mods::Mod& m : mods::all()) {
+        bool on = mods::enabled(m.id);
+        // the first look settles the water where it belongs, without a wave
+        if (!m.seen)
+            m.seen = true, m.was_on = on, m.level = on ? 0.4f : -0.2f;
+        if (on && !m.was_on)
+            m.cover = 0, m.level = 0.9f, m.vel = 0;
+        m.was_on = on;
+        if (m.cover < 1)
+            m.cover = std::min(1.f, m.cover + dt / 0.45f);
+        float target = !on ? -0.2f : m.cover < 1 ? 0.92f : 0.4f;
+        m.vel += ((target - m.level) * 60 - m.vel * 8) * dt;
+        m.level += m.vel * dt;
+    }
+}
+
 void draw(ImVec2 size, float dt) {
     ImDrawList* dl = ImGui::GetForegroundDrawList();
     ImFont* font = ImGui::GetFont();
@@ -203,20 +223,6 @@ void draw(ImVec2 size, float dt) {
             continue;
         }
         bool on = mods::enabled(m.id);
-        // the water of the launcher's tiles: a spring moves the level so it sloshes and
-        // settles, and turning a mod on sends a wave in from the right
-        // the first look settles the water where it belongs, without a wave
-        if (!m.seen)
-            m.seen = true, m.was_on = on, m.level = on ? 0.4f : -0.2f;
-        if (on && !m.was_on)
-            m.cover = 0, m.level = 0.9f, m.vel = 0;
-        m.was_on = on;
-        if (m.cover < 1)
-            m.cover = std::min(1.f, m.cover + dt / 0.45f);
-        float target = !on ? -0.2f : m.cover < 1 ? 0.92f : 0.4f;
-        m.vel += ((target - m.level) * 60 - m.vel * 8) * dt;
-        m.level += m.vel * dt;
-
         dl->AddRectFilled(a, b, INK, r);
         if (m.level > -0.08f) {
             // the inside of the rounded tile at x, so the water never leaves it
@@ -349,6 +355,7 @@ void frame(EGLDisplay display, EGLSurface surface) {
     dt = std::clamp(dt, 1 / 1000.f, 0.25f);
     last_frame = now;
     mods::tick(dt);
+    step_water(dt);
     mods::limit_fps();
     // the HUDs show over a world being played, not over the game's screens
     if (!wanted && !((mods::hud_visible() || mods::effects_visible()) && playing()))
