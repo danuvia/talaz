@@ -6,12 +6,12 @@ Talaz runs the Android build of Bedrock through [mcpelauncher](https://github.co
 
 ## Layout
 
-- `mod/` is the in-game mod, a C++ library mcpelauncher loads next to the game. It draws with Dear ImGui. Right Shift opens the menu.
+- `mod/` is the in-game mods, a C++ library mcpelauncher loads next to the game. They live in their own repository, [talaz-mods](https://github.com/danuvia/talaz-mods), checked out here as a submodule: clone with `git clone --recurse-submodules`, or run `git submodule update --init` after cloning. Right Shift opens the menu.
 - `app/` is the launcher, a Tauri app. It starts the game with the mod loaded.
 
-## Building the mod
+## Building the mods
 
-You need CMake and the Android NDK.
+You need CMake and the Android NDK. See [talaz-mods](https://github.com/danuvia/talaz-mods) for more.
 
 ```bash
 cmake -S mod -B mod/build/arm64 -DCMAKE_TOOLCHAIN_FILE="$NDK/build/cmake/android.toolchain.cmake" -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-28 -DANDROID_STL=c++_static -DCMAKE_BUILD_TYPE=Release
