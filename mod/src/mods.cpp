@@ -105,10 +105,12 @@ std::optional<float> zoomed_fov(void* camera) {
     return fov;
 }
 
-// Night Vision answers the game's own "how much night vision" question with full,
-// so it looks the same as the potion, leaves the HUD alone and does not stack with it
+// Night Vision makes the game believe the player has the effect: every place that
+// asks "has night vision?" before asking "how much?" hears yes, and "how much" hears
+// full. It looks the same as the potion, leaves the HUD alone and does not stack with it
 static uint32_t* night_vision_scale = nullptr;
 static uint32_t night_vision_original[2];
+static std::vector<std::pair<uint32_t*, uint32_t>> night_vision_checks;
 static void* (*patch_code)(void*, void*, size_t) = nullptr;
 
 static void set_night_vision(bool on) {
@@ -117,6 +119,11 @@ static void set_night_vision(bool on) {
         return;
     const uint32_t full[2] = {0x1E2E1000, 0xD65F03C0}; // fmov s0, #1.0; ret
     patch_code(night_vision_scale, const_cast<uint32_t*>(on ? full : night_vision_original), sizeof full);
+    for (auto& [at, original] : night_vision_checks) {
+        uint32_t yes = 0x52800020; // mov w0, #1
+        patch_code(at, on ? &yes : &original, sizeof yes);
+    }
+    __android_log_print(ANDROID_LOG_INFO, CLIENT_NAME, "Night Vision %s at %p: %08x %08x", on ? "on" : "off", night_vision_scale, night_vision_scale[0], night_vision_scale[1]);
     now = on;
 }
 
@@ -138,6 +145,17 @@ void find_night_vision(const std::vector<Segment>& segs, void* (*patch)(void*, v
                 continue;
             night_vision_scale = w + i - 0xd4 / 4;
             std::memcpy(night_vision_original, night_vision_scale, sizeof night_vision_original);
+            // the callers: the closest bl before each call is the "has the effect?" check
+            for (size_t j = 0; j < n; j++) {
+                if ((w[j] & 0xfc000000) != 0x94000000 || w + j + (int32_t(w[j] << 6) >> 6) != night_vision_scale)
+                    continue;
+                for (size_t k = j - 1; k + 8 > j && k > 0; k--)
+                    if ((w[k] & 0xfc000000) == 0x94000000) {
+                        night_vision_checks.emplace_back(w + k, w[k]);
+                        break;
+                    }
+            }
+            __android_log_print(ANDROID_LOG_INFO, CLIENT_NAME, "Night Vision found %zu checks", night_vision_checks.size());
             patch_code = patch;
             return;
         }
