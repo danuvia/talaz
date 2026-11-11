@@ -105,11 +105,45 @@ std::optional<float> zoomed_fov(void* camera) {
     return fov;
 }
 
+// Night Vision answers the game's own "how much night vision" question with full,
+// so it looks the same as the potion, leaves the HUD alone and does not stack with it
+static uint32_t* night_vision_scale = nullptr;
+static uint32_t night_vision_original[2];
+static void* (*patch_code)(void*, void*, size_t) = nullptr;
+
+static void set_night_vision(bool on) {
+    static bool now = false;
+    if (!night_vision_scale || on == now)
+        return;
+    const uint32_t full[2] = {0x1E2E1000, 0xD65F03C0}; // fmov s0, #1.0; ret
+    patch_code(night_vision_scale, const_cast<uint32_t*>(on ? full : night_vision_original), sizeof full);
+    now = on;
+}
+
 struct Segment {
     std::byte* begin;
     size_t size;
     bool exec;
 };
+
+// found by the formula's 0.2 pi constant: mov w8, #0xd97c; movk w8, #0x3f20, lsl #16
+// ponytail: the start sits 0xd4 before it on 1.21.114.1. Scan back for the prologue if other versions move it
+void find_night_vision(const std::vector<Segment>& segs, void* (*patch)(void*, void*, size_t)) {
+    for (const Segment& seg : segs) {
+        if (!seg.exec)
+            continue;
+        auto* w = reinterpret_cast<uint32_t*>(seg.begin);
+        for (size_t i = 0x40, n = seg.size / 4 - 1; i < n; i++) {
+            if (w[i] != 0x529B2F88 || w[i + 1] != 0x72A7E408 || w[i - 0xd4 / 4] != 0xD10143FF)
+                continue;
+            night_vision_scale = w + i - 0xd4 / 4;
+            std::memcpy(night_vision_original, night_vision_scale, sizeof night_vision_original);
+            patch_code = patch;
+            return;
+        }
+    }
+    __android_log_print(ANDROID_LOG_ERROR, CLIENT_NAME, "Night Vision couldn't find the game's night vision");
+}
 
 std::vector<Segment> segments_of(void* lib) {
     struct Search {
@@ -218,6 +252,7 @@ void install_zoom() {
     // CameraAPI's vtable, found through its RTTI: the type name string, the
     // typeinfo that points at it, then the vtable that points at the typeinfo
     std::vector<Segment> segs = segments_of(game);
+    find_night_vision(segs, patch);
     static const char name[] = "\0" "9CameraAPI";
     std::byte* found = find_string(segs, name, sizeof name);
     if (!found)
@@ -302,12 +337,13 @@ void tick(float dt) {
         }
     }
 
+    set_night_vision(enabled("nightvision"));
     float target = zoom_held ? 1 / config::get("zoom.factor") : 1;
     zoom_now += (target - zoom_now) * (1 - std::exp(-dt * 12));
 }
 
 bool effects_visible() {
-    return enabled("nightvision") || enabled("motionblur");
+    return enabled("motionblur");
 }
 
 // The effects change the finished picture, so they also touch the game's own
@@ -317,13 +353,6 @@ void draw_effects(ImDrawList* dl) {
     static GLuint last = 0;
     static bool have_last = false;
     ImVec2 size = ImGui::GetIO().DisplaySize;
-    if (enabled("nightvision")) {
-        // dst * src + dst: every white rectangle doubles the brightness and black stays black
-        dl->AddCallback([](const ImDrawList*, const ImDrawCmd*) { glBlendFuncSeparate(GL_DST_COLOR, GL_ONE, GL_ZERO, GL_ONE); }, nullptr);
-        for (float left = config::get("nightvision.strength"); left >= 2; left /= 2)
-            dl->AddRectFilled(ImVec2(0, 0), size, IM_COL32_WHITE);
-        dl->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
-    }
     if (!enabled("motionblur")) {
         have_last = false;
         return;

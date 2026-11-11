@@ -58,6 +58,8 @@
     X(PFNGLGETERRORPROC, glGetError) \
     X(PFNGLDISABLEVERTEXATTRIBARRAYPROC, glDisableVertexAttribArray) \
     X(PFNGLCOPYTEXIMAGE2DPROC, glCopyTexImage2D) \
+    X(PFNGLBINDATTRIBLOCATIONPROC, glBindAttribLocation) \
+    X(PFNGLUNIFORM1FPROC, glUniform1f) \
 
 #define TALAZ_GL_DECLARE(type, name) extern type tc_##name;
 TALAZ_GL_FUNCS(TALAZ_GL_DECLARE)
@@ -119,3 +121,5 @@ bool load();
 #define glGetError tc_glGetError
 #define glDisableVertexAttribArray tc_glDisableVertexAttribArray
 #define glCopyTexImage2D tc_glCopyTexImage2D
+#define glBindAttribLocation tc_glBindAttribLocation
+#define glUniform1f tc_glUniform1f
