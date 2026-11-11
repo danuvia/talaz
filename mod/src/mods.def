@@ -1,0 +1,32 @@
+// Every mod and its settings, written once. mods.cpp builds the game menu's tiles and
+// pages from this file, and the launcher (app/src-tauri/src/main.rs) its Mods page.
+// A new mod is one MOD line here, plus what it does in mods.cpp.
+//
+// MOD(id, name, note, on at first)
+// SLIDER(mod, name, key, unit, min, max, step, default)
+// SWITCH(mod, name, key, default)
+
+MOD(zoom, "Zoom", "Hold C to zoom in, scroll to zoom further", 0)
+MOD(fps, "FPS", "Frames per second on screen", 0)
+MOD(cps, "CPS", "Clicks per second", 0)
+MOD(keystrokes, "Keystrokes", "Shows the keys you press", 0)
+MOD(clock, "Clock", "The real time, so you know when to stop", 0)
+MOD(session, "Session", "How long you have been playing", 0)
+MOD(fpslimit, "FPS Limit", "Caps the frame rate to keep the computer cool and quiet", 0)
+MOD(togglesprint, "Toggle Sprint", "Press Ctrl once to keep sprinting", 0)
+MOD(nightvision, "Night Vision", "Brightens the picture so caves and nights are easy to see", 0)
+MOD(motionblur, "Motion Blur", "Smears the world the way the camera turns", 0)
+MOD(riptide, "Riptide", "Breaks the launcher's hidden frame cap, for about three times the frame rate", 1)
+MOD(camerasway, "Camera Sway", "Tilts the camera as you strafe and kicks it up on a jump", 0)
+
+SLIDER(zoom, "Zoom", "zoom.factor", "×", 1.5, 10, 0.5, 4)
+SWITCH(zoom, "Smooth zoom", "zoom.smooth", 1)
+SLIDER(fpslimit, "Frame cap", "fpslimit.cap", " fps", 20, 240, 5, 60)
+SWITCH(motionblur, "Follow the camera", "motionblur.camera", 1)
+SLIDER(motionblur, "Amount", "motionblur.amount", "%", 10, 90, 5, 50)
+SLIDER(motionblur, "Samples", "motionblur.samples", "", 4, 32, 2, 12)
+SLIDER(camerasway, "Turn tilt", "camerasway.tilt", "°", 0, 4, 0.25, 1.5)
+SLIDER(camerasway, "Jump tilt", "camerasway.jump", "", 0, 6, 0.5, 4)
+SWITCH(clock, "24-hour clock", "clock.24h", 1)
+SWITCH(keystrokes, "Mouse buttons", "keystrokes.mouse", 1)
+SWITCH(keystrokes, "Space bar", "keystrokes.space", 1)

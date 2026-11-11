@@ -98,32 +98,77 @@ fn installed() -> Vec<(String, PathBuf)> {
     found
 }
 
-// ponytail: the mod names live here and in mod/src/mods.cpp. Have the mod write its own list once there are many
-const MODS: &[(&str, &str, &str)] = &[
-    ("zoom", "Zoom", "Hold C to zoom in, scroll to zoom further"),
-    ("fps", "FPS", "Frames per second on screen"),
-    ("cps", "CPS", "Clicks per second"),
-    ("keystrokes", "Keystrokes", "Shows the keys you press"),
-    ("clock", "Clock", "The real time, so you know when to stop"),
-    ("session", "Session", "How long you have been playing"),
-    ("fpslimit", "FPS Limit", "Caps the frame rate to keep the computer cool and quiet"),
-    ("togglesprint", "Toggle Sprint", "Press Ctrl once to keep sprinting"),
-    ("nightvision", "Night Vision", "Brightens the picture so caves and nights are easy to see"),
-    ("motionblur", "Motion Blur", "Smears the world the way the camera turns"),
-    ("riptide", "Riptide", "Breaks the launcher's hidden frame cap, for about three times the frame rate"),
-    ("camerasway", "Camera Sway", "Tilts the camera as you strafe and kicks it up on a jump"),
-];
+/// Every mod and its settings, from the mod's own list; the Mods page is built from it
+const MODS_DEF: &str = include_str!("../../../mod/src/mods.def");
 
-/// The one setting a mod has in the launcher: mod, key, unit, default and the values to pick from.
-/// The defaults are the mod's own, from mod/src/mods.cpp
-/// The mods on until turned off
-const DEFAULT_ON: &[&str] = &["riptide"];
+struct DefMod {
+    id: &'static str,
+    name: &'static str,
+    note: &'static str,
+    on: bool,
+}
 
-const OPTIONS: &[(&str, &str, &str, f32, &[f32])] = &[
-    ("zoom", "zoom.factor", "×", 4.0, &[2.0, 3.0, 4.0, 6.0, 8.0]),
-    ("fpslimit", "fpslimit.cap", " fps", 60.0, &[30.0, 60.0, 90.0, 120.0, 144.0, 240.0]),
-    ("motionblur", "motionblur.amount", "%", 50.0, &[30.0, 50.0, 70.0, 85.0]),
-];
+/// A mod's slider; the launcher shows a mod's first one
+struct DefSlider {
+    mod_id: &'static str,
+    key: &'static str,
+    unit: &'static str,
+    min: f32,
+    max: f32,
+    step: f32,
+    default: f32,
+}
+
+/// The arguments of a MOD(...) or SLIDER(...) line, quotes taken off
+fn def_args(line: &'static str) -> Vec<&'static str> {
+    let inner = line.split_once('(').and_then(|(_, rest)| rest.rsplit_once(')')).map_or("", |(inner, _)| inner);
+    let (mut out, mut start, mut quoted) = (Vec::new(), 0, false);
+    for (i, c) in inner.char_indices() {
+        match c {
+            '"' => quoted = !quoted,
+            ',' if !quoted => {
+                out.push(inner[start..i].trim().trim_matches('"'));
+                start = i + 1;
+            }
+            _ => {}
+        }
+    }
+    out.push(inner[start..].trim().trim_matches('"'));
+    out
+}
+
+fn mods_def() -> &'static (Vec<DefMod>, Vec<DefSlider>) {
+    static DEF: std::sync::OnceLock<(Vec<DefMod>, Vec<DefSlider>)> = std::sync::OnceLock::new();
+    DEF.get_or_init(|| {
+        let (mut mods, mut sliders) = (Vec::new(), Vec::new());
+        let num = |v: &str| v.parse::<f32>().unwrap_or(0.0);
+        for line in MODS_DEF.lines().map(str::trim) {
+            let a = def_args(line);
+            if line.starts_with("MOD(") && a.len() == 4 {
+                mods.push(DefMod { id: a[0], name: a[1], note: a[2], on: a[3] != "0" });
+            } else if line.starts_with("SLIDER(") && a.len() == 8 {
+                sliders.push(DefSlider { mod_id: a[0], key: a[2], unit: a[3], min: num(a[4]), max: num(a[5]), step: num(a[6]), default: num(a[7]) });
+            }
+        }
+        (mods, sliders)
+    })
+}
+
+impl DefSlider {
+    /// The values a right click on the tile steps through: five across the range, and the default
+    fn choices(&self) -> Vec<f32> {
+        let snap = |v: f32| ((v - self.min) / self.step).round() * self.step + self.min;
+        let mut out: Vec<f32> = (0..5).map(|i| snap(self.min + (self.max - self.min) * i as f32 / 4.0)).chain([self.default]).collect();
+        out.sort_by(f32::total_cmp);
+        out.dedup();
+        out
+    }
+
+    fn allows(&self, value: f32) -> bool {
+        let steps = (value - self.min) / self.step;
+        value >= self.min && value <= self.max && (steps - steps.round()).abs() < 1e-3
+    }
+}
 
 /// The file the mod keeps the active profile's settings in, next to its library
 fn profile_file() -> Option<PathBuf> {
@@ -157,7 +202,7 @@ struct Opt {
     key: &'static str,
     unit: &'static str,
     value: f32,
-    choices: &'static [f32],
+    choices: Vec<f32>,
 }
 
 #[derive(serde::Serialize)]
@@ -182,7 +227,17 @@ fn state() -> State {
         running: RUNNING.load(Ordering::SeqCst),
         set_up: game_folder_file().is_some_and(|file| file.exists()),
         game_folder: game_dir().map(|dir| dir.display().to_string()).unwrap_or_default(),
-        mods: MODS.iter().map(|&(id, name, note)| Mod { id, name, note, on: ini_get(&settings, &format!("{id}.enabled")).map_or(DEFAULT_ON.contains(&id), |v| v != 0.0), option: OPTIONS.iter().find(|(of, ..)| *of == id).map(|&(_, key, unit, default, choices)| Opt { key, unit, value: ini_get(&settings, key).unwrap_or(default), choices }) }).collect(),
+        mods: mods_def()
+            .0
+            .iter()
+            .map(|m| Mod {
+                id: m.id,
+                name: m.name,
+                note: m.note,
+                on: ini_get(&settings, &format!("{}.enabled", m.id)).map_or(m.on, |v| v != 0.0),
+                option: mods_def().1.iter().find(|s| s.mod_id == m.id).map(|s| Opt { key: s.key, unit: s.unit, value: ini_get(&settings, s.key).unwrap_or(s.default), choices: s.choices() }),
+            })
+            .collect(),
     }
 }
 
@@ -190,7 +245,7 @@ fn state() -> State {
 // ponytail: a running game writes its own settings back over this. Tell the mod instead once the two can talk
 #[tauri::command]
 fn set_mod(id: String, on: bool) -> Result<(), String> {
-    if !MODS.iter().any(|(known, ..)| *known == id) {
+    if !mods_def().0.iter().any(|m| m.id == id) {
         return Err("No such mod".into());
     }
     save(&format!("{id}.enabled"), on as u8 as f32)
@@ -199,7 +254,7 @@ fn set_mod(id: String, on: bool) -> Result<(), String> {
 /// Changes a mod's setting for the next start of the game
 #[tauri::command]
 fn set_option(key: String, value: f32) -> Result<(), String> {
-    if !OPTIONS.iter().any(|(_, known, _, _, choices)| *known == key && choices.contains(&value)) {
+    if !mods_def().1.iter().any(|s| s.key == key && s.allows(value)) {
         return Err("No such setting".into());
     }
     save(&key, value)
@@ -650,6 +705,16 @@ mod tests {
         let text = super::ini_set("zoom.enabled=0\nzoom.factor=4\n", "zoom.enabled", 1.0);
         assert_eq!(text, "zoom.factor=4\nzoom.enabled=1\n");
         assert_eq!(super::ini_get(&text, "zoom.enabled"), Some(1.0));
+    }
+
+    #[test]
+    fn the_mods_come_from_the_mods_own_list() {
+        let (mods, sliders) = super::mods_def();
+        assert!(mods.iter().any(|m| m.id == "riptide" && m.on && m.name == "Riptide"));
+        assert!(mods.iter().any(|m| m.id == "zoom" && !m.on));
+        let zoom = sliders.iter().find(|s| s.key == "zoom.factor").unwrap();
+        assert_eq!((zoom.unit, zoom.default), ("×", 4.0));
+        assert!(zoom.choices().contains(&4.0) && zoom.allows(5.5) && !zoom.allows(5.3));
     }
 
     #[test]

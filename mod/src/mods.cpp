@@ -31,19 +31,15 @@ constexpr int KEY_W = 'W', KEY_A = 'A', KEY_S = 'S', KEY_D = 'D', KEY_SPACE = ' 
 constexpr int KEY_PRESS = 0, KEY_RELEASE = 2;
 constexpr int BUTTON_PRESS = 0;
 
+// The mods and their settings come from mods.def, shared with the launcher
 Mod list[] = {
-        {"zoom", "Zoom", "Hold C to zoom in, scroll to zoom further"},
-        {"fps", "FPS", "Frames per second on screen"},
-        {"cps", "CPS", "Clicks per second"},
-        {"keystrokes", "Keystrokes", "Shows the keys you press"},
-        {"clock", "Clock", "The real time, so you know when to stop"},
-        {"session", "Session", "How long you have been playing"},
-        {"fpslimit", "FPS Limit", "Caps the frame rate to keep the computer cool and quiet"},
-        {"togglesprint", "Toggle Sprint", "Press Ctrl once to keep sprinting"},
-        {"nightvision", "Night Vision", "Brightens the picture so caves and nights are easy to see"},
-        {"motionblur", "Motion Blur", "Smears the world the way the camera turns"},
-        {"riptide", "Riptide", "Breaks the launcher's hidden frame cap, for about three times the frame rate"},
-        {"camerasway", "Camera Sway", "Tilts the camera as you strafe and kicks it up on a jump"},
+#define MOD(id, name, note, on) {#id, name, note},
+#define SLIDER(...)
+#define SWITCH(...)
+#include "mods.def"
+#undef MOD
+#undef SLIDER
+#undef SWITCH
 };
 
 // The mods that draw on screen, stacked down the top-left at first
@@ -627,19 +623,29 @@ bool enabled(const char* id) {
 }
 
 // Every mod's settings, shown on its own page in the menu: a slider from min to
-// max, or a switch when there is no step
+// max, or a switch when there is no step. From mods.def
+struct Declared {
+    const char* key;
+    float value;
+};
 const Setting SETTINGS[] = {
-        {"zoom", "Zoom", "zoom.factor", "\u00d7", 1.5f, 10, 0.5f},
-        {"zoom", "Smooth zoom", "zoom.smooth"},
-        {"fpslimit", "Frame cap", "fpslimit.cap", " fps", 20, 240, 5},
-        {"motionblur", "Follow the camera", "motionblur.camera"},
-        {"motionblur", "Amount", "motionblur.amount", "%", 10, 90, 5},
-        {"motionblur", "Samples", "motionblur.samples", "", 4, 32, 2},
-        {"camerasway", "Turn tilt", "camerasway.tilt", "\u00b0", 0, 4, 0.25f},
-        {"camerasway", "Jump tilt", "camerasway.jump", "", 0, 6, 0.5f},
-        {"clock", "24-hour clock", "clock.24h"},
-        {"keystrokes", "Mouse buttons", "keystrokes.mouse"},
-        {"keystrokes", "Space bar", "keystrokes.space"},
+#define MOD(...)
+#define SLIDER(mod, name, key, unit, min, max, step, value) {#mod, name, key, unit, min, max, step},
+#define SWITCH(mod, name, key, value) {#mod, name, key},
+#include "mods.def"
+#undef SLIDER
+#undef SWITCH
+};
+// what each setting and mod starts at
+const Declared DEFAULTS[] = {
+#undef MOD
+#define MOD(id, name, note, on) {#id ".enabled", on},
+#define SLIDER(mod, name, key, unit, min, max, step, value) {key, value},
+#define SWITCH(mod, name, key, value) {key, value},
+#include "mods.def"
+#undef MOD
+#undef SLIDER
+#undef SWITCH
 };
 
 std::vector<const Setting*> settings_of(const char* id) {
@@ -677,22 +683,10 @@ void toggle(const char* id) {
 }
 
 void declare() {
-    // Riptide is on until turned off; every other mod starts off
-    for (const Mod& mod : list)
-        config::declare(std::string(mod.id) + ".enabled", std::strcmp(mod.id, "riptide") == 0);
-    config::declare("fpslimit.cap", 60);
-    config::declare("motionblur.amount", 50);
+    for (const Declared& d : DEFAULTS)
+        config::declare(d.key, d.value);
     config::declare("key.zoom", 'C');
     config::declare("key.sprint", 17);
-    config::declare("zoom.factor", 4);
-    config::declare("zoom.smooth", 1);
-    config::declare("motionblur.camera", 1);
-    config::declare("camerasway.tilt", 1.5f);
-    config::declare("camerasway.jump", 4);
-    config::declare("motionblur.samples", 12);
-    config::declare("clock.24h", 1);
-    config::declare("keystrokes.mouse", 1);
-    config::declare("keystrokes.space", 1);
 }
 
 void limit_fps() {
