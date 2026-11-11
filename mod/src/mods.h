@@ -13,7 +13,10 @@ struct Mod {
     const char* id;
     const char* name;
     const char* note;
-    float level = 0;  // how far the menu tile's water has risen, 0 to 1
+    // the menu tile's water: its level (0 to 1), how fast it moves, how far the
+    // wave has come in from the right, and whether the mod was on last frame
+    float level = -0.2f, vel = 0, cover = 1;
+    bool was_on = false, seen = false;
 };
 
 std::span<Mod> all();
@@ -49,6 +52,8 @@ void limit_fps();
 /// True when the game should not see the key
 bool on_key(int key, int action, bool playing);
 void on_mouse_button(int button, int action);
+// The game's mouse motion while it holds the mouse, for the camera blur
+void on_look(double dx, double dy);
 bool on_scroll(double dy, bool playing);
 
 // Called once per frame, before drawing

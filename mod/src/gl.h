@@ -60,6 +60,10 @@
     X(PFNGLCOPYTEXIMAGE2DPROC, glCopyTexImage2D) \
     X(PFNGLBINDATTRIBLOCATIONPROC, glBindAttribLocation) \
     X(PFNGLUNIFORM1FPROC, glUniform1f) \
+    X(PFNGLDRAWARRAYSPROC, glDrawArrays) \
+    X(PFNGLUNIFORM2FPROC, glUniform2f) \
+    X(PFNGLCOLORMASKPROC, glColorMask) \
+    X(PFNGLGETBOOLEANVPROC, glGetBooleanv) \
 
 #define TALAZ_GL_DECLARE(type, name) extern type tc_##name;
 TALAZ_GL_FUNCS(TALAZ_GL_DECLARE)
@@ -123,3 +127,7 @@ bool load();
 #define glCopyTexImage2D tc_glCopyTexImage2D
 #define glBindAttribLocation tc_glBindAttribLocation
 #define glUniform1f tc_glUniform1f
+#define glDrawArrays tc_glDrawArrays
+#define glUniform2f tc_glUniform2f
+#define glColorMask tc_glColorMask
+#define glGetBooleanv tc_glGetBooleanv

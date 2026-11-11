@@ -109,7 +109,7 @@ const MODS: &[(&str, &str, &str)] = &[
     ("fpslimit", "FPS Limit", "Caps the frame rate to keep the computer cool and quiet"),
     ("togglesprint", "Toggle Sprint", "Press Ctrl once to keep sprinting"),
     ("nightvision", "Night Vision", "Brightens the picture so caves and nights are easy to see"),
-    ("motionblur", "Motion Blur", "Blends each frame into the next for a smooth trail"),
+    ("motionblur", "Motion Blur", "Smears the world the way the camera turns"),
 ];
 
 /// The one setting a mod has in the launcher: mod, key, unit, default and the values to pick from.

@@ -203,15 +203,49 @@ void draw(ImVec2 size, float dt) {
             continue;
         }
         bool on = mods::enabled(m.id);
-        m.level += ((on ? 1.f : 0.f) - m.level) * std::min(1.f, dt * 10);
+        // the water of the launcher's tiles: a spring moves the level so it sloshes and
+        // settles, and turning a mod on sends a wave in from the right
+        // the first look settles the water where it belongs, without a wave
+        if (!m.seen)
+            m.seen = true, m.was_on = on, m.level = on ? 0.4f : -0.2f;
+        if (on && !m.was_on)
+            m.cover = 0, m.level = 0.9f, m.vel = 0;
+        m.was_on = on;
+        if (m.cover < 1)
+            m.cover = std::min(1.f, m.cover + dt / 0.45f);
+        float target = !on ? -0.2f : m.cover < 1 ? 0.92f : 0.4f;
+        m.vel += ((target - m.level) * 60 - m.vel * 8) * dt;
+        m.level += m.vel * dt;
 
         dl->AddRectFilled(a, b, INK, r);
-        float rise = m.level * 62 * u;
-        if (rise > 1) {
-            float corner = std::min(r, rise);
-            dl->PathArcTo(ImVec2(b.x - corner, b.y - corner), corner, 0, PI / 2);
-            dl->PathArcTo(ImVec2(a.x + corner, b.y - corner), corner, PI / 2, PI);
-            wave(dl, a.x, b.x, b.y - rise, std::min(3 * u, rise / 4), time * 1.5f + i);
+        if (m.level > -0.08f) {
+            // the inside of the rounded tile at x, so the water never leaves it
+            auto edge = [&](float x) {
+                float d = std::min(x - a.x, b.x - x);
+                return d >= r ? 0.f : r - std::sqrt(std::max(0.f, r * r - (r - d) * (r - d)));
+            };
+            float H = b.y - a.y, W = b.x - a.x, amp = 2.5f * u + std::min(12 * u, std::abs(m.vel) * 16 * u);
+            auto surface = [&](float x) {
+                float y = b.y - H * m.level + amp * std::sin((x - a.x) / u * 0.04f + time * 2.4f + i) +
+                          amp * 0.45f * std::sin((x - a.x) / u * 0.09f - time * 3.3f);
+                return std::clamp(y, a.y + edge(x), b.y - edge(x));
+            };
+            float x0 = a.x + W * std::pow(1 - m.cover, 3.f), step = 4 * u;
+            if (m.cover < 1) {
+                // the front curls forward at the top
+                float y0 = surface(x0);
+                for (float y = b.y - edge(x0); y > y0; y -= step) {
+                    float f = (b.y - y) / std::max(1.f, b.y - y0);
+                    float x = std::max(a.x + edge(x0), x0 - 18 * u * f * f - 4 * u * std::sin(y / u * 0.15f + time * 10));
+                    dl->PathLineTo(ImVec2(x, std::clamp(y, a.y + edge(x), b.y - edge(x))));
+                }
+            }
+            for (float x = x0; x < b.x; x += step)
+                dl->PathLineTo(ImVec2(x, surface(x)));
+            dl->PathLineTo(ImVec2(b.x, surface(b.x)));
+            for (float x = b.x; x > x0; x -= step)
+                dl->PathLineTo(ImVec2(x, b.y - edge(x)));
+            dl->PathLineTo(ImVec2(x0, b.y - edge(x0)));
             dl->PathFillConcave(WATER);
         }
         dl->AddRect(a, b, on ? ACCENT : hover ? MUTED : LINE, r, 0, std::max(1.f, u));
@@ -287,6 +321,8 @@ bool mouse_button(double x, double y, int button, int action) {
 
 bool mouse_move(double x, double y, bool relative) {
     relative_mouse = relative;
+    if (relative && !wanted && playing())
+        mods::on_look(x, y);
     if (relative && wanted) {
         cursor_x = std::clamp(cursor_x + float(x), 0.f, width);
         cursor_y = std::clamp(cursor_y + float(y), 0.f, height);
