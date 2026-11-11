@@ -640,8 +640,45 @@ fn leave_full(window: tauri::Window) {
     }
 }
 
+/// Looks for a newer Talaz on GitHub Releases at start, installs it and starts again,
+/// like OneClient. The progress shows in the page's usual toast
+fn update(app: tauri::AppHandle) {
+    // a build run from the source tree updates through git, not here
+    if cfg!(debug_assertions) {
+        return;
+    }
+    tauri::async_runtime::spawn(async move {
+        use tauri_plugin_updater::UpdaterExt;
+        let Ok(updater) = app.updater() else { return };
+        let Ok(Some(update)) = updater.check().await else { return };
+        let text = format!("Updating Talaz to {}", update.version);
+        let mut done = 0;
+        let installed = update
+            .download_and_install(
+                |chunk, total| {
+                    done += chunk;
+                    runtime::progress(&app, &text, total.map(|total| (done as f64 / total as f64).min(1.0)));
+                },
+                || {},
+            )
+            .await;
+        match installed {
+            // a running game keeps going; the new Talaz opens next time
+            Ok(()) if !RUNNING.load(Ordering::SeqCst) => app.restart(),
+            Ok(()) => runtime::progress(&app, "Talaz updates when it next starts", Some(1.0)),
+            Err(err) => runtime::progress(&app, &format!("Couldn't update Talaz: {err}"), None),
+        }
+    });
+}
+
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
+        .setup(|app| {
+            update(app.handle().clone());
+            Ok(())
+        })
         // macOS's own full screen leaves the notch's row black; the green button goes to the older
         // whole-screen mode instead, which hides the menu bar and covers that row too
         .on_window_event(|window, event| {
