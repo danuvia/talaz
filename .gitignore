@@ -4,3 +4,4 @@ __pycache__/
 target/
 app/src-tauri/gen/
 shots/
+mod/.cache/

@@ -105,9 +105,18 @@ pub fn ensure(app: &AppHandle) -> Result<(), String> {
         run("/usr/bin/plutil", &["-replace".as_ref(), key.as_ref(), "-string".as_ref(), value.as_ref(), plist.as_os_str()])?;
     }
     let png = dir.join("icon.png");
-    std::fs::write(&png, include_bytes!("../icons/icon.png")).map_err(|err| err.to_string())?;
-    // a missing icon is not worth failing the install over
-    let _ = run("/usr/bin/sips", &["-s".as_ref(), "format".as_ref(), "icns".as_ref(), png.as_os_str(), "--out".as_ref(), part.join("Contents/Resources/minecraft.icns").as_os_str()]);
+    std::fs::write(&png, include_bytes!("../icons/game.png")).map_err(|err| err.to_string())?;
+    // sips can't write icns, so build an iconset for iconutil. A missing icon is not worth failing the install over
+    let set = dir.join("game.iconset");
+    let _ = std::fs::create_dir_all(&set);
+    for size in [16, 32, 128, 256, 512] {
+        for (scale, name) in [(1, format!("icon_{size}x{size}.png")), (2, format!("icon_{size}x{size}@2x.png"))] {
+            let px = (size * scale).to_string();
+            let _ = run("/usr/bin/sips", &["-z".as_ref(), px.as_ref(), px.as_ref(), png.as_os_str(), "--out".as_ref(), set.join(name).as_os_str()]);
+        }
+    }
+    let _ = run("/usr/bin/iconutil", &["-c".as_ref(), "icns".as_ref(), set.as_os_str(), "-o".as_ref(), part.join("Contents/Resources/minecraft.icns").as_os_str()]);
+    let _ = std::fs::remove_dir_all(&set);
     let _ = std::fs::remove_file(&png);
 
     std::fs::rename(&part, &bundle).map_err(|err| err.to_string())

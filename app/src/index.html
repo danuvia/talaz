@@ -7,7 +7,7 @@
 @font-face { font-family: Poppins; src: url(Poppins-Regular.ttf); }
 :root { --accent: #4FD8C4; --text: #E8EEF2; --muted: #9AA9B5; --ink: #10171D; --deep: #0C1217; --line: #1E2A33; --water: rgba(79, 216, 196, 0.22); --ease: cubic-bezier(0.2, 0.8, 0.2, 1); }
 * { box-sizing: border-box; }
-body { margin: 0; height: 100vh; background: radial-gradient(900px 500px at 85% -10%, rgba(79, 216, 196, 0.10), transparent 70%), var(--deep); color: var(--text); font: 14px Poppins, system-ui, sans-serif; font-synthesis: none; user-select: none; cursor: default; overflow: hidden; }
+body { margin: 0; height: 100vh; background: radial-gradient(900px 500px at 85% -10%, rgba(79, 216, 196, 0.10), transparent 70%), var(--deep); color: var(--text); font: 14px Poppins, system-ui, sans-serif; font-synthesis: none; -webkit-user-select: none; user-select: none; cursor: default; overflow: hidden; }
 button, select { font: inherit; color: inherit; }
 button { cursor: pointer; border: 0; background: none; padding: 0; }
 button:disabled { opacity: 0.45; cursor: default; }
@@ -55,9 +55,12 @@ h1 { font-size: 84px; line-height: 1; letter-spacing: -4px; margin: 10px 0 30px 
 
 /* the sea under every page */
 .sea { position: absolute; left: 0; bottom: 0; width: 100%; height: 190px; overflow: hidden; pointer-events: none; }
-.sea svg { position: absolute; bottom: 0; left: 0; width: 200%; height: 100%; animation: drift 18s linear infinite; }
-.sea svg:nth-child(2) { height: 78%; animation-duration: 11s; animation-direction: reverse; }
-.sea svg:nth-child(3) { height: 56%; animation-duration: 7s; }
+/* in the stylesheet, since Tauri's CSP nonce blocks style attributes. Painted as repeating backgrounds: wide moving svg layers flickered in WebKit */
+.sea i { position: absolute; left: 0; right: 0; bottom: 0; height: 100%; background: repeat-x 0 100% / 960px 100%; animation: roll 18s linear infinite; }
+.sea i:nth-child(1) { background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 960 120' preserveAspectRatio='none'><path d='M0 120V40c80-32 160-32 240 0s160 32 240 0 160-32 240 0 160 32 240 0v80z' fill='%234FD8C4' fill-opacity='0.07'/></svg>"); }
+.sea i:nth-child(2) { background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 960 120' preserveAspectRatio='none'><path d='M0 120V40c80-32 160-32 240 0s160 32 240 0 160-32 240 0 160 32 240 0v80z' fill='%234FD8C4' fill-opacity='0.10'/></svg>"); height: 78%; animation-duration: 11s; animation-direction: reverse; }
+.sea i:nth-child(3) { background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 960 120' preserveAspectRatio='none'><path d='M0 120V40c80-32 160-32 240 0s160 32 240 0 160-32 240 0 160 32 240 0v80z' fill='%234FD8C4' fill-opacity='0.16'/></svg>"); height: 56%; animation-duration: 7s; }
+@keyframes roll { to { background-position-x: -960px; } }
 @keyframes drift { to { transform: translateX(-50%); } }
 
 /* mods: a tile fills with water when its mod is on */
@@ -72,9 +75,7 @@ h1 { font-size: 84px; line-height: 1; letter-spacing: -4px; margin: 10px 0 30px 
 .tile small { position: relative; z-index: 1; margin-top: 6px; color: var(--muted); font-size: 13px; line-height: 1.45; }
 .tile em { position: relative; z-index: 1; margin-top: auto; font-style: normal; font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); transition: color 0.3s; }
 .tile[aria-checked=true] em { color: var(--accent); }
-.tile .fill { position: absolute; left: 0; right: 0; bottom: 0; height: 34%; background: var(--water); transform: translateY(110%); transition: transform 0.9s var(--ease); }
-.tile[aria-checked=true] .fill { transform: none; }
-.tile .fill svg { position: absolute; bottom: 100%; left: 0; width: 200%; height: 14px; animation: drift 5s linear infinite; }
+.tile .water { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; fill: var(--water); }
 
 /* lists */
 .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
@@ -108,7 +109,7 @@ h1 { font-size: 84px; line-height: 1; letter-spacing: -4px; margin: 10px 0 30px 
 </style>
 </head>
 <body>
-<header data-tauri-drag-region>
+<header>
 <div class="brand">
 <svg aria-hidden="true" width="22" height="22" viewBox="0 0 26 26" fill="none" stroke="#4FD8C4" stroke-width="2.4" stroke-linecap="round"><path d="M2 10c4-5 7-5 11 0s7 5 11 0"/><path d="M2 18c4-5 7-5 11 0s7 5 11 0"/></svg>
 talaz
@@ -173,9 +174,9 @@ talaz
 </section>
 
 <div class="sea" aria-hidden="true">
-<svg viewBox="0 0 1920 120" preserveAspectRatio="none"><path d="M0 120V40c80-32 160-32 240 0s160 32 240 0 160-32 240 0 160 32 240 0 160-32 240 0 160 32 240 0 160-32 240 0 160 32 240 0v80z" fill="#4FD8C4" fill-opacity="0.07"/></svg>
-<svg viewBox="0 0 1920 120" preserveAspectRatio="none"><path d="M0 120V40c80-32 160-32 240 0s160 32 240 0 160-32 240 0 160 32 240 0 160-32 240 0 160 32 240 0 160-32 240 0 160 32 240 0v80z" fill="#4FD8C4" fill-opacity="0.10"/></svg>
-<svg viewBox="0 0 1920 120" preserveAspectRatio="none"><path d="M0 120V40c80-32 160-32 240 0s160 32 240 0 160-32 240 0 160 32 240 0 160-32 240 0 160 32 240 0 160-32 240 0 160 32 240 0v80z" fill="#4FD8C4" fill-opacity="0.16"/></svg>
+<i></i>
+<i></i>
+<i></i>
 </div>
 
 <div id="toast" role="status"><p></p><div><i></i></div></div>
@@ -253,10 +254,11 @@ function draw() {
   // mods: made once, then only switched, so the water moves instead of jumping
   if (!$('tiles').children.length) {
     for (const { id, name, note } of state.mods) {
-      const tile = el('button', { className: 'tile', role: 'switch', id: `mod-${id}` }, el('strong', {}, name), el('small', {}, note), el('em'), el('div', { className: 'fill', innerHTML: '<svg viewBox="0 0 480 14" preserveAspectRatio="none"><path d="M0 14V7c40-9 80-9 120 0s80 9 120 0 80-9 120 0 80 9 120 0v7z" fill="rgba(79,216,196,0.22)"/></svg>' }));
+      const tile = el('button', { className: 'tile', role: 'switch', id: `mod-${id}` }, el('strong', {}, name), el('small', {}, note), el('em'), water());
       tile.onclick = async () => {
         const mod = state.mods.find((mod) => mod.id === id);
         mod.on = !mod.on;
+        if (mod.on && waters.has(tile)) Object.assign(waters.get(tile), { cover: 0, level: 0.9, vel: 0 });
         draw();
         try { await invoke('set_mod', { id, on: mod.on }); } catch (err) { say(String(err)); refresh(); }
       };
@@ -377,6 +379,69 @@ invoke('available').then(async (list) => {
   notes = await invoke('notes', { versions: [...new Set(names)] }).catch(() => ({}));
   draw();
 }).catch((err) => $('downloads').replaceChildren(el('div', { className: 'row muted' }, String(err))));
+
+// The water in a mod tile is drawn every frame: a spring moves its level, so it
+// sloshes and settles, and turning a mod on sends a wave in from the right
+const waters = new Map();
+function water() {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.classList.add('water');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.append(document.createElementNS('http://www.w3.org/2000/svg', 'path'));
+  return svg;
+}
+let lastFrame = performance.now();
+function flow(now) {
+  const dt = Math.min((now - lastFrame) / 1000, 0.05), t = now / 1000;
+  lastFrame = now;
+  if (!$('mods').classList.contains('on')) return requestAnimationFrame(flow);
+  for (const tile of document.querySelectorAll('.tile')) {
+    const on = tile.getAttribute('aria-checked') === 'true', svg = tile.querySelector('.water');
+    if (!waters.has(tile)) waters.set(tile, { cover: 1, level: on ? 0.34 : -0.2, vel: 0, seed: Math.random() * 9 });
+    const w = waters.get(tile), W = tile.clientWidth, H = tile.clientHeight;
+    if (tile.hidden || !W) continue;
+    if (w.cover < 1) w.cover = Math.min(1, w.cover + dt / 0.45);
+    const target = !on ? -0.2 : w.cover < 1 ? 1 : 0.34;
+    w.vel += ((target - w.level) * 60 - w.vel * 8) * dt;
+    w.level += w.vel * dt;
+    const path = svg.firstChild;
+    if (!on && w.level < -0.08) { path.removeAttribute('d'); continue; }
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    // a calm surface ripples a little; a moving one swells with its speed
+    const amp = 2.5 + Math.min(12, Math.abs(w.vel) * 16);
+    const top = (x) => H * (1 - w.level) + amp * Math.sin(x * 0.04 + t * 2.4 + w.seed) + amp * 0.45 * Math.sin(x * 0.09 - t * 3.3);
+    const x0 = W * Math.pow(1 - w.cover, 3);
+    let d = `M${W} ${H}L${x0} ${H}`;
+    if (w.cover < 1) {
+      // the wave's front curls forward at the top
+      const y0 = top(x0);
+      for (let y = H; y > y0; y -= 6) d += `L${x0 - 18 * Math.pow((H - y) / (H - y0), 2) - 4 * Math.sin(y * 0.15 + t * 10)} ${y}`;
+    }
+    for (let x = x0; x < W; x += 6) d += `L${x} ${top(x)}`;
+    path.setAttribute('d', d + `L${W} ${top(W)}Z`);
+  }
+  requestAnimationFrame(flow);
+}
+requestAnimationFrame(flow);
+
+// the window moves from any empty spot. Moved by hand: macOS drops startDragging when the call lands after the click
+let drag = null;
+const win = window.__TAURI__.window.getCurrentWindow();
+document.addEventListener('mousedown', async (event) => {
+  if (event.button !== 0 || event.target.closest('button, select, input, a, .tile, .row')) return;
+  const start = { x: event.screenX, y: event.screenY };
+  drag = start;
+  const [pos, scale] = await Promise.all([win.outerPosition(), win.scaleFactor()]);
+  if (drag === start) Object.assign(drag, { pos, scale });
+});
+document.addEventListener('mousemove', (event) => {
+  if (!drag?.pos) return;
+  if (!event.buttons) return void (drag = null);
+  win.setPosition(new window.__TAURI__.dpi.PhysicalPosition(drag.pos.x + Math.round((event.screenX - drag.x) * drag.scale), drag.pos.y + Math.round((event.screenY - drag.y) * drag.scale)));
+});
+document.addEventListener('mouseup', () => (drag = null));
+// a launcher has no use for the browser's Reload and Inspect Element
+document.addEventListener('contextmenu', (event) => event.target.closest('input') || event.preventDefault());
 </script>
 </body>
 </html>
