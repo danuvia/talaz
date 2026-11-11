@@ -61,8 +61,11 @@ h1 { font-size: 84px; line-height: 1; letter-spacing: -4px; margin: 10px 0 30px 
 @keyframes drift { to { transform: translateX(-50%); } }
 
 /* mods: a tile fills with water when its mod is on */
+#find { width: 260px; height: 40px; margin-bottom: 16px; padding: 0 16px; border: 1px solid var(--line); border-radius: 20px; background: rgba(16, 23, 29, 0.8); color: var(--text); font: inherit; font-size: 14px; }
+#find:focus { outline: none; border-color: var(--accent); }
 .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
 .tile { position: relative; overflow: hidden; height: 172px; padding: 22px; border: 1px solid var(--line); border-radius: 24px; background: var(--ink); text-align: left; display: flex; flex-direction: column; transition: border-color 0.3s, transform 0.3s var(--ease); }
+.tile[hidden] { display: none; }
 .tile:hover { transform: translateY(-3px); border-color: #2c3d49; }
 .tile[aria-checked=true] { border-color: rgba(79, 216, 196, 0.5); }
 .tile strong { position: relative; z-index: 1; font-weight: 400; font-size: 22px; letter-spacing: -0.5px; }
@@ -142,6 +145,7 @@ talaz
 <section class="page" id="mods">
 <h2>Mods</h2>
 <p>Pick what the game starts with. Everything else is in the game, behind Right Shift.</p>
+<input id="find" type="search" placeholder="Search mods" aria-label="Search mods">
 <div class="tiles" id="tiles"></div>
 </section>
 
@@ -328,6 +332,10 @@ $('folder').onclick = () => invoke('open_game_folder').catch((err) => say(String
 $('size').append(...SIZES.map((size) => new Option(size.replace('x', ' × '), size)));
 $('size').value = SIZES.includes(localStorage.getItem('size')) ? localStorage.getItem('size') : SIZES[0];
 $('size').onchange = () => { localStorage.setItem('size', $('size').value); draw(); };
+$('find').oninput = () => {
+  const want = $('find').value.trim().toLowerCase();
+  for (const tile of $('tiles').children) tile.hidden = !tile.textContent.toLowerCase().includes(want);
+};
 // a known problem with the picked version, shown above the title
 async function warn() {
   const name = $('version').value, text = name && await invoke('warning', { version: name }).catch(() => null);
