@@ -380,6 +380,17 @@ fn start_screen(vanilla: &str) -> Option<String> {
         ours.push(json!({format!("talaz_{name}@common_buttons.light_text_button"): button}));
     }
     theirs.push(mark("talaz_vanilla_mark", [3.0, 1.0, 254.0], "0%", "0%"));
+    // the screen switch below lies under the whole top row; these take the clicks it shouldn't get,
+    // a button pressing nothing, over the gaps beside the cube and left of the way back
+    let block = |name: &str, x: f64, w: f64| {
+        let mut button = place(x, 0.03, w, 0.06);
+        let fields = json!({"layer": 55, "$pressed_button_name": "button.talaz_nothing", "$button_text": "", "$default_button_texture": clear,
+            "$hover_button_texture": clear, "$pressed_button_texture": clear, "$locked_button_texture": clear, "$border_visible": false});
+        button.as_object_mut().map(|o| o.extend(fields.as_object().cloned().unwrap_or_default()));
+        json!({format!("{name}@common_buttons.light_text_button"): button})
+    };
+    ours.push(block("talaz_block_ours", 0.9, 0.08));
+    theirs.push(block("talaz_block_theirs", 0.865, 0.08));
     // one toggle outside both screens switches them. It lies under the whole top row: on Talaz's
     // screen the inbox and quit buttons sit above it and its left end, the cube, is what's left;
     // the game's screen has nothing there, so the way back can sit at the right end
