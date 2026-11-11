@@ -163,6 +163,35 @@ void find_night_vision(const std::vector<Segment>& segs, void* (*patch)(void*, v
     __android_log_print(ANDROID_LOG_ERROR, CLIENT_NAME, "Night Vision couldn't find the game's night vision");
 }
 
+// The game builds a texture each frame from an image stored inside it that it
+// can't read under mcpelauncher, and logs a failure every time. Point it at an
+// empty PNG instead: nothing it showed goes away, and the retries stop
+// ponytail: the offsets are 1.21.114.1's, checked against the instructions before patching. Find them by pattern for other versions
+static const unsigned char blank_png[] = {
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00,
+    0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4, 0x89, 0x00, 0x00, 0x00, 0x0b, 0x49,
+    0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x60, 0x00, 0x02, 0x00, 0x00, 0x05, 0x00, 0x01, 0x7a, 0x5e, 0xab, 0x3f, 0x00,
+    0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82};
+
+void fix_unreadable_image(std::byte* base, void* (*patch)(void*, void*, size_t)) {
+    auto* at = reinterpret_cast<uint32_t*>(base + 0x64a1978);
+    // adrp x1; mov w2, #0x530c; add x1, x1; ...; movk w2, #1, lsl #16
+    if (at[0] != 0x90050d21 || at[1] != 0x528a6182 || at[2] != 0x913d0021 || at[5] != 0x72a00022)
+        return;
+    auto pc = reinterpret_cast<uintptr_t>(at), png = reinterpret_cast<uintptr_t>(blank_png);
+    int64_t pages = int64_t(png >> 12) - int64_t(pc >> 12);
+    if (pages >= (1 << 20) || pages < -(1 << 20))
+        return;
+    uint32_t adrp = 0x90000001 | uint32_t(pages & 3) << 29 | uint32_t((pages >> 2) & 0x7ffff) << 5;
+    uint32_t add = 0x91000021 | uint32_t(png & 0xfff) << 10;
+    uint32_t len = sizeof blank_png;
+    uint32_t code[3] = {adrp, 0x52800002 | (len & 0xffff) << 5, add};
+    uint32_t high = 0x72a00002 | (len >> 16) << 5;
+    patch(at, code, sizeof code);
+    patch(at + 5, &high, sizeof high);
+    __android_log_print(ANDROID_LOG_INFO, CLIENT_NAME, "Pointed the unreadable built-in image at a blank one");
+}
+
 std::vector<Segment> segments_of(void* lib) {
     struct Search {
         void* lib;
@@ -271,6 +300,8 @@ void install_zoom() {
     // typeinfo that points at it, then the vtable that points at the typeinfo
     std::vector<Segment> segs = segments_of(game);
     find_night_vision(segs, patch);
+    if (!segs.empty() && segs.front().exec)
+        fix_unreadable_image(segs.front().begin, patch);
     static const char name[] = "\0" "9CameraAPI";
     std::byte* found = find_string(segs, name, sizeof name);
     if (!found)
