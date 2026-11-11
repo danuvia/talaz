@@ -288,7 +288,8 @@ void sway_tick(float dt, bool jumped, float turned_px) {
         roll_build = std::clamp(roll_build + (keys[3] ? -0.35f : 0.35f), -1.f, 1.f);
     strafed = strafing;
     float x = std::abs(roll_build), eased = x < 0.5f ? 4 * x * x * x : 1 - std::pow(-2 * x + 2, 3.f) / 2;
-    sway_roll = on ? eased * config::get("camerasway.tilt") * (roll_build < 0 ? -1.f : 1.f) : 0;
+    // eased once more on the way to the screen, so the tilt glides rather than follows each mouse jolt
+    sway_roll = damp(sway_roll, on ? eased * config::get("camerasway.tilt") * (roll_build < 0 ? -1.f : 1.f) : 0, 0.1f, dt);
 
     // the jump: Minecraft's 0.42 blocks a tick up, gravity 0.08 a tick and drag 0.98
     // a press counts on the ground or on the way down, the game taking it as soon as
@@ -675,8 +676,8 @@ void declare() {
     config::declare("zoom.factor", 4);
     config::declare("zoom.smooth", 1);
     config::declare("motionblur.camera", 1);
-    config::declare("camerasway.tilt", 1.25f);
-    config::declare("camerasway.jump", 2.5f);
+    config::declare("camerasway.tilt", 1.5f);
+    config::declare("camerasway.jump", 4);
     config::declare("motionblur.samples", 12);
     config::declare("clock.24h", 1);
     config::declare("keystrokes.mouse", 1);
