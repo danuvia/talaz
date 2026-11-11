@@ -590,11 +590,12 @@ document.addEventListener('keydown', (event) => event.key === 'Escape' && full &
 let drag = null;
 const win = window.__TAURI__.window.getCurrentWindow();
 document.addEventListener('mousedown', async (event) => {
-  if (event.button !== 0 || event.target.closest('button, select, input, a, pre, .tile, .row')) return;
+  // a window filling the screen stays put
+  if (full || event.button !== 0 || event.target.closest('button, select, input, a, pre, .tile, .row')) return;
   const start = { x: event.screenX, y: event.screenY };
   drag = start;
-  const [pos, scale] = await Promise.all([win.outerPosition(), win.scaleFactor()]);
-  if (drag === start) Object.assign(drag, { pos, scale });
+  const [pos, scale, fullscreen] = await Promise.all([win.outerPosition(), win.scaleFactor(), win.isFullscreen()]);
+  if (drag === start && !fullscreen) Object.assign(drag, { pos, scale });
 });
 document.addEventListener('mousemove', (event) => {
   if (!drag?.pos) return;
