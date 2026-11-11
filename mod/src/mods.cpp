@@ -41,6 +41,7 @@ Mod list[] = {
         {"togglesprint", "Toggle Sprint", "Press Ctrl once to keep sprinting"},
         {"nightvision", "Night Vision", "Brightens the picture so caves and nights are easy to see"},
         {"motionblur", "Motion Blur", "Smears the world the way the camera turns"},
+        {"camerasway", "Camera Sway", "Tilts the camera as you strafe and kicks it up on a jump"},
 };
 
 // The mods that draw on screen, stacked down the top-left at first
@@ -91,6 +92,8 @@ std::optional<float> (*try_get_fov)(void*) = nullptr;
 std::atomic<int> implausible{0};
 constexpr int GIVE_UP_AFTER = 120;
 
+float last_fov = 70;  // the field of view the world was last drawn with, for Camera Sway
+
 std::optional<float> zoomed_fov(void* camera) {
     std::optional<float> fov = try_get_fov(camera);
     if (implausible >= GIVE_UP_AFTER)
@@ -101,6 +104,7 @@ std::optional<float> zoomed_fov(void* camera) {
         return fov;
     }
     implausible = 0;
+    last_fov = *fov * zoom_now;
     *fov *= zoom_now;
     return fov;
 }
@@ -251,6 +255,74 @@ void camera_blur(GLint vp[4]) {
     glDrawArrays(GL_TRIANGLES, 0, 3);
 }
 
+// Camera Sway, like OneClient's Camera Overhaul: the world tilts as the player
+// strafes and kicks up on a jump, then springs back. The finished world is turned
+// and shifted a few degrees, which at these angles looks like turning the camera,
+// and drawn a little larger so its edges never show. The hand and HUD stay put
+// ponytail: driven by the keys, not the player's real motion, so a jump in the air or water kicks too. Read the player's velocity once the mod finds it
+std::atomic<bool> jump_pressed{false};
+float sway_roll = 0, sway_roll_v = 0, sway_pitch = 0, sway_pitch_v = 0;  // degrees
+
+bool sway_active() {
+    return enabled("camerasway") && (std::abs(sway_roll) > 0.01f || std::abs(sway_pitch) > 0.01f);
+}
+
+void sway_tick(float dt, bool jumped) {
+    float roll_to = enabled("camerasway") ? (float(keys[3]) - float(keys[1])) * config::get("camerasway.tilt") : 0;
+    if (jumped && enabled("camerasway"))
+        sway_pitch_v += config::get("camerasway.jump") * 14;
+    // springs: stiff enough to settle in about half a second, damped so they don't wobble
+    sway_roll_v += ((roll_to - sway_roll) * 40 - sway_roll_v * 11) * dt;
+    sway_roll += sway_roll_v * dt;
+    sway_pitch_v += (-sway_pitch * 60 - sway_pitch_v * 10) * dt;
+    sway_pitch += sway_pitch_v * dt;
+}
+
+void sway_world(GLint vp[4]) {
+    static GLuint program = 0, vao = 0, frame = 0;
+    if (!program) {
+        const char* vs = "#version 300 es\nout vec2 uv;\n"
+                         "void main() { vec2 p = vec2(gl_VertexID == 1 ? 3.0 : -1.0, gl_VertexID == 2 ? 3.0 : -1.0);"
+                         " uv = p * 0.5 + 0.5; gl_Position = vec4(p, 0, 1); }";
+        const char* fs = "#version 300 es\nprecision highp float; uniform sampler2D frame; uniform vec2 turn; uniform vec2 shift;"
+                         " uniform float aspect; uniform float grow; in vec2 uv; out vec4 color;\n"
+                         "void main() { vec2 p = (uv - 0.5) * vec2(aspect, 1.0) / grow;"
+                         " p = vec2(p.x * turn.x - p.y * turn.y, p.x * turn.y + p.y * turn.x);"
+                         " color = vec4(texture(frame, p / vec2(aspect, 1.0) + 0.5 + shift).rgb, 1); }";
+        program = glCreateProgram();
+        for (auto [type, src] : {std::pair{GL_VERTEX_SHADER, vs}, std::pair{GL_FRAGMENT_SHADER, fs}}) {
+            GLuint shader = glCreateShader(type);
+            glShaderSource(shader, 1, &src, nullptr);
+            glCompileShader(shader);
+            glAttachShader(program, shader);
+            glDeleteShader(shader);
+        }
+        glLinkProgram(program);
+        glGenVertexArrays(1, &vao);
+        glGenTextures(1, &frame);
+        glBindTexture(GL_TEXTURE_2D, frame);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    }
+    float aspect = float(vp[2]) / float(vp[3]), roll = sway_roll * 3.14159265f / 180;
+    // a pitch of a degrees moves the picture by tan(a) over tan(fov / 2) of half its height
+    float shift = -0.5f * std::tan(sway_pitch * 3.14159265f / 180) / std::tan(last_fov * 3.14159265f / 360);
+    float grow = std::abs(std::cos(roll)) + std::abs(std::sin(roll)) * aspect + 2 * std::abs(shift);
+    glBindTexture(GL_TEXTURE_2D, frame);
+    glCopyTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, vp[0], vp[1], vp[2], vp[3], 0);
+    glDisable(GL_BLEND);
+    glUseProgram(program);
+    glUniform1i(glGetUniformLocation(program, "frame"), 0);
+    glUniform2f(glGetUniformLocation(program, "turn"), std::cos(roll), std::sin(roll));
+    glUniform2f(glGetUniformLocation(program, "shift"), 0, shift);
+    glUniform1f(glGetUniformLocation(program, "aspect"), aspect);
+    glUniform1f(glGetUniformLocation(program, "grow"), grow);
+    glBindVertexArray(vao);
+    glDrawArrays(GL_TRIANGLES, 0, 3);
+}
+
 void blur_world() {
     static GLuint program = 0, vao = 0, last = 0;
     static GLint last_w = 0, last_h = 0;
@@ -275,6 +347,15 @@ void blur_world() {
     glGetBooleanv(GL_COLOR_WRITEMASK, mask);
     bool blend = glIsEnabled(GL_BLEND), depth = glIsEnabled(GL_DEPTH_TEST), cull = glIsEnabled(GL_CULL_FACE),
          scissor = glIsEnabled(GL_SCISSOR_TEST), stencil = glIsEnabled(GL_STENCIL_TEST);
+    if (sway_active()) {
+        glDisable(GL_DEPTH_TEST);
+        glDisable(GL_CULL_FACE);
+        glDisable(GL_SCISSOR_TEST);
+        glDisable(GL_STENCIL_TEST);
+        glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_FALSE);
+        sway_world(vp);
+    }
+    if (blur_keep > 0) {
 
     if (!program) {
         // one triangle over the whole screen, made from the vertex number alone
@@ -330,6 +411,7 @@ void blur_world() {
     last_w = vp[2];
     last_h = vp[3];
     }
+    }
 
     glUseProgram(prog);
     glBindVertexArray(va);
@@ -346,11 +428,15 @@ void blur_world() {
 }
 
 void clear_hook(GLbitfield bits) {
-    if (bits == GL_DEPTH_BUFFER_BIT && blur_keep > 0 && tc_glDrawArrays && !blurred_this_frame.exchange(true)) {
+    // only the screen's own depth clear counts: the paper doll and other pictures
+    // are drawn in framebuffers of their own and clear there first
+    if (bits == GL_DEPTH_BUFFER_BIT && (blur_keep > 0 || sway_active()) && tc_glDrawArrays && !blurred_this_frame) {
         GLint fb = 0;
         glGetIntegerv(GL_FRAMEBUFFER_BINDING, &fb);
-        if (fb == 0)
+        if (fb == 0) {
+            blurred_this_frame = true;
             blur_world();
+        }
     }
     real_clear(bits);
 }
@@ -406,6 +492,32 @@ void install_blur(void* (*patch)(void*, void*, size_t)) {
     real_clear = reinterpret_cast<decltype(real_clear)>(hook_import("glClear", (void*)clear_hook, patch));
     if (!real_clear)
         __android_log_print(ANDROID_LOG_ERROR, CLIENT_NAME, "Motion Blur couldn't find the game's glClear");
+}
+
+// The game's "hide paper doll" setting, caught as the game registers it: the
+// Options object's registerOption is called once per setting, and the one called
+// from the paper doll's line is this setting. Its value is the byte at 0x10
+// ponytail: the offsets are 1.21.114.1's, checked before patching. Unknown versions keep the HUDs beside the paper doll's spot
+const unsigned char* hide_paper_doll = nullptr;
+void* (*real_register_option)(void*, void*) = nullptr;
+uintptr_t paper_doll_call = 0;
+
+void* register_option_hook(void* options, void* option) {
+    void* registered = real_register_option(options, option);
+    if (reinterpret_cast<uintptr_t>(__builtin_return_address(0)) == paper_doll_call)
+        hide_paper_doll = static_cast<const unsigned char*>(registered) + 0x10,
+        __android_log_print(ANDROID_LOG_INFO, CLIENT_NAME, "Found the paper doll setting");
+    return registered;
+}
+
+void watch_paper_doll(std::byte* base, void* (*patch)(void*, void*, size_t)) {
+    auto** slot = reinterpret_cast<void**>(base + 0x1003e290 + 0x80);
+    if (*slot != base + 0x6c6a868)
+        return;
+    real_register_option = reinterpret_cast<decltype(real_register_option)>(*slot);
+    paper_doll_call = reinterpret_cast<uintptr_t>(base + 0x6c7f2ac);
+    void* hook = reinterpret_cast<void*>(&register_option_hook);
+    patch(slot, &hook, sizeof hook);
 }
 
 std::vector<Segment> segments_of(void* lib) {
@@ -472,6 +584,8 @@ const Setting SETTINGS[] = {
         {"motionblur", "Follow the camera", "motionblur.camera"},
         {"motionblur", "Amount", "motionblur.amount", "%", 10, 90, 5},
         {"motionblur", "Samples", "motionblur.samples", "", 4, 32, 2},
+        {"camerasway", "Strafe tilt", "camerasway.tilt", "\u00b0", 0, 6, 0.5f},
+        {"camerasway", "Jump kick", "camerasway.jump", "\u00b0", 0, 6, 0.5f},
         {"clock", "24-hour clock", "clock.24h"},
         {"keystrokes", "Mouse buttons", "keystrokes.mouse"},
         {"keystrokes", "Space bar", "keystrokes.space"},
@@ -521,6 +635,8 @@ void declare() {
     config::declare("zoom.factor", 4);
     config::declare("zoom.smooth", 1);
     config::declare("motionblur.camera", 1);
+    config::declare("camerasway.tilt", 2);
+    config::declare("camerasway.jump", 2);
     config::declare("motionblur.samples", 12);
     config::declare("clock.24h", 1);
     config::declare("keystrokes.mouse", 1);
@@ -560,7 +676,7 @@ void install_zoom() {
     find_night_vision(segs, patch);
     install_blur(patch);
     if (!segs.empty() && segs.front().exec)
-        fix_unreadable_image(segs.front().begin, patch);
+        fix_unreadable_image(segs.front().begin, patch), watch_paper_doll(segs.front().begin, patch);
     static const char name[] = "\0" "9CameraAPI";
     std::byte* found = find_string(segs, name, sizeof name);
     if (!found)
@@ -599,8 +715,11 @@ bool on_key(int key, int action, bool playing) {
             sprinting = !sprinting;
         return down != sprinting;
     }
-    if (int slot = key_slot(key); slot >= 0)
+    if (int slot = key_slot(key); slot >= 0) {
+        if (slot == 4 && down && !keys[4] && playing)
+            jump_pressed = true;
         keys[slot] = down;
+    }
     if (key == int(config::get("key.zoom")))
         zoom_held = down && playing && enabled("zoom");
     return false;
@@ -654,6 +773,7 @@ void tick(float dt) {
     // a new frame may blur again; the last frame keeps amount of itself per 60th of a
     // second, like the Java mods, so the trail is as long at 200 fps as at 60
     blurred_this_frame = false;
+    sway_tick(dt, jump_pressed.exchange(false));
     // the turn since the last frame, scaled to a 60th of a second so the blur is as
     // long at any frame rate
     look_vx = look_x.exchange(0) / std::max(dt * 60, 0.1f);
@@ -665,7 +785,7 @@ void tick(float dt) {
 
 // Motion Blur draws nothing itself, but it needs the menu's GL functions loaded
 bool effects_visible() {
-    return enabled("motionblur");
+    return enabled("motionblur") || enabled("camerasway");
 }
 
 // Nothing drawn over the finished picture any more; Motion Blur sits in the game's frame
@@ -675,24 +795,8 @@ bool hud_visible() {
     return std::any_of(std::begin(HUDS), std::end(HUDS), [](const char* hud) { return enabled(hud); });
 }
 
-// Whether the game draws its paper doll in the top left corner, from its own
-// settings. Read again every few seconds, so turning it off in the game counts
 bool paper_doll() {
-    static bool shown = true;
-    static Clock::time_point next;
-    if (Clock::now() < next)
-        return shown;
-    next = Clock::now() + std::chrono::seconds(3);
-    if (FILE* f = std::fopen("/data/data/com.mojang.minecraftpe/games/com.mojang/minecraftpe/options.txt", "r")) {
-        char line[256];
-        while (std::fgets(line, sizeof line, f))
-            if (std::strncmp(line, "gfx_hidepaperdoll:", 18) == 0 && shown != (line[18] == '0')) {
-                shown = line[18] == '0';
-                __android_log_print(ANDROID_LOG_INFO, CLIENT_NAME, "Paper doll %s", shown ? "shown" : "hidden");
-            }
-        std::fclose(f);
-    }
-    return shown;
+    return !hide_paper_doll || *hide_paper_doll == 0;
 }
 
 // The HUDs stack down from the top left in a fixed order, each below the one

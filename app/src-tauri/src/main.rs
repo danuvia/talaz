@@ -110,6 +110,7 @@ const MODS: &[(&str, &str, &str)] = &[
     ("togglesprint", "Toggle Sprint", "Press Ctrl once to keep sprinting"),
     ("nightvision", "Night Vision", "Brightens the picture so caves and nights are easy to see"),
     ("motionblur", "Motion Blur", "Smears the world the way the camera turns"),
+    ("camerasway", "Camera Sway", "Tilts the camera as you strafe and kicks it up on a jump"),
 ];
 
 /// The one setting a mod has in the launcher: mod, key, unit, default and the values to pick from.
