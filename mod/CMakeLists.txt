@@ -3,6 +3,8 @@ cmake_minimum_required(VERSION 3.15)
 project(talaz_bedrock CXX)
 
 set(CMAKE_CXX_STANDARD 20)
+# for clangd
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 include(FetchContent)
 
@@ -15,6 +17,7 @@ FetchContent_MakeAvailable(imgui)
 add_library(talaz_bedrock SHARED
         src/main.cpp
         src/menu.cpp
+        src/mods.cpp
         src/config.cpp
         src/gl.cpp
         ${imgui_SOURCE_DIR}/imgui.cpp

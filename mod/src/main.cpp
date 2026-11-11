@@ -5,6 +5,7 @@
 
 #include "menu.h"
 #include "config.h"
+#include "mods.h"
 
 namespace {
 
@@ -46,6 +47,7 @@ extern "C" [[gnu::visibility("default")]] void mod_init() {
     // every setting is declared before the file is read, and before input starts
     // Right Shift, as the launcher reports it
     config::declare("key.menu", 16 | 256);
+    mods::declare();
     config::load();
     void* gw = dlopen("libmcpelauncher_gamewindow.so", 0);
     if (!gw)
@@ -75,6 +77,8 @@ extern "C" [[gnu::visibility("default")]] void mod_init() {
                 menubar = static_cast<const int*>(host_dlsym(launcher, "_ZN8Settings11menubarsizeE"));
     }
     menu::connect(is_mouse_locked ? +[] { return is_mouse_locked(get_primary_window()); } : nullptr, menubar);
+
+    mods::install_zoom();
 
     add_window_creation_callback(nullptr, on_window_created);
     add_swap_buffers_callback(nullptr, [](void*, EGLDisplay display, EGLSurface surface) { menu::frame(display, surface); });

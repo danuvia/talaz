@@ -3,12 +3,17 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <cmath>
+#include <cstdlib>
+#include <string>
 
 #include "assets.h"
 #include "config.h"
 #include "gl.h"
 #include "imgui.h"
 #include "imgui_impl_opengl3.h"
+#include "mods.h"
+#include "theme.h"
 
 EMBED(font_regular, FONT_DIR "/Poppins-Regular.ttf")
 
@@ -57,17 +62,68 @@ void load_fonts() {
     ImFontConfig config;
     config.FontDataOwnedByAtlas = false;
     Asset font = ASSET(font_regular);
-    io.Fonts->AddFontFromMemoryTTF((void*)font.data, int(font.size), 16 * scale, &config);
+    io.Fonts->AddFontFromMemoryTTF((void*)font.data, int(font.size), 24 * scale, &config);
     ImGui_ImplOpenGL3_DestroyFontsTexture();
     ImGui_ImplOpenGL3_CreateFontsTexture();
 }
 
-// Stands in until the menu is designed
-void draw(ImVec2 size) {
+using namespace theme;
+constexpr float PI = 3.14159265f;
+
+// The swell: a wave line across the box from a to b, crest height amp
+void wave(ImDrawList* dl, float x0, float x1, float y, float amp, float phase) {
+    for (int i = 0; i <= 24; i++)
+        dl->PathLineTo(ImVec2(x0 + (x1 - x0) * i / 24, y - amp * std::sin(phase + i * PI / 6)));
+}
+
+void draw(ImVec2 size, float dt) {
     ImDrawList* dl = ImGui::GetForegroundDrawList();
-    dl->AddRectFilled(ImVec2(0, 0), size, IM_COL32(0, 0, 0, 140));
-    ImVec2 text = ImGui::CalcTextSize(CLIENT_NAME);
-    dl->AddText(ImVec2((size.x - text.x) / 2, (size.y - text.y) / 2), IM_COL32_WHITE, CLIENT_NAME);
+    ImFont* font = ImGui::GetFont();
+    ImVec2 mouse = ImGui::GetIO().MousePos;
+    // the design is drawn for a 720p screen
+    float u = scale * 1.5f, time = float(ImGui::GetTime());
+    dl->AddRectFilled(ImVec2(0, 0), size, IM_COL32(6, 10, 14, 189));
+
+    float left = std::round((size.x - 960 * u) / 2), top = std::round(96 * u);
+    wave(dl, left, left + 24 * u, top + 16 * u, 3 * u, 0);
+    dl->PathStroke(ACCENT, 0, 2.4f * u);
+    wave(dl, left, left + 24 * u, top + 26 * u, 3 * u, 0);
+    dl->PathStroke(ACCENT, 0, 2.4f * u);
+    dl->AddText(font, 22 * u, ImVec2(left + 36 * u, top + 6 * u), TEXT, "talaz");
+
+    float gap = 12 * u, w = (960 * u - 3 * gap) / 4, h = 132 * u, r = 14 * u;
+    int i = 0;
+    for (mods::Mod& m : mods::all()) {
+        ImVec2 a(std::round(left + (i % 4) * (w + gap)), std::round(top + 64 * u + (i / 4) * (h + gap)));
+        ImVec2 b(a.x + std::round(w), a.y + std::round(h));
+        i++;
+        bool hover = mouse.x >= a.x && mouse.x < b.x && mouse.y >= a.y && mouse.y < b.y;
+        if (hover && ImGui::IsMouseClicked(0))
+            mods::toggle(m.id);
+        bool on = mods::enabled(m.id);
+        m.level += ((on ? 1.f : 0.f) - m.level) * std::min(1.f, dt * 10);
+
+        dl->AddRectFilled(a, b, INK, r);
+        float rise = m.level * 62 * u;
+        if (rise > 1) {
+            float corner = std::min(r, rise);
+            dl->PathArcTo(ImVec2(b.x - corner, b.y - corner), corner, 0, PI / 2);
+            dl->PathArcTo(ImVec2(a.x + corner, b.y - corner), corner, PI / 2, PI);
+            wave(dl, a.x, b.x, b.y - rise, std::min(3 * u, rise / 4), time * 1.5f + i);
+            dl->PathFillConcave(WATER);
+        }
+        dl->AddRect(a, b, on ? ACCENT : hover ? MUTED : LINE, r, 0, std::max(1.f, u));
+        dl->AddText(font, 15 * u, ImVec2(a.x + 16 * u, a.y + 14 * u), TEXT, m.name);
+        float note = 12.5f * u;
+        ImVec2 ns = font->CalcTextSizeA(note, FLT_MAX, w - 32 * u, m.note);
+        dl->AddText(font, note, ImVec2(a.x + 16 * u, b.y - 14 * u - ns.y), on ? TEXT : MUTED, m.note, nullptr, w - 32 * u);
+    }
+
+    float foot = top + 64 * u + (i + 3) / 4 * (h + gap) + 8 * u, small = 12.5f * u;
+    dl->AddText(font, small, ImVec2(left, foot), MUTED, "Click a tile to turn it on.");
+    std::string profile = "Profile: " + config::profile();
+    ImVec2 ps = font->CalcTextSizeA(small, FLT_MAX, 0, profile.c_str());
+    dl->AddText(font, small, ImVec2(left + 960 * u - ps.x, foot), MUTED, profile.c_str());
 }
 
 }  // namespace
@@ -75,9 +131,12 @@ void draw(ImVec2 size) {
 void connect(bool (*locked)(), const int* menubar) {
     mouse_locked = locked;
     menubar_height = menubar;
+    // for looking at the menu without entering a world
+    wanted = std::getenv("TALAZ_PREVIEW") != nullptr;
 }
 
 bool key(int key, int action) {
+    mods::on_key(key, action, playing() && !wanted);
     // The menu key opens the menu in a world and not over other screens; the
     // game only holds the mouse while nothing is open
     if (action == KEY_PRESS && key == int(config::get("key.menu")) && (wanted || playing())) {
@@ -92,6 +151,8 @@ bool key(int key, int action) {
 }
 
 bool mouse_button(double x, double y, int button, int action) {
+    if (!wanted)
+        mods::on_mouse_button(button, action);
     if (!wanted || !ready)
         return wanted;
     // The launcher numbers buttons from 1, left first
@@ -123,6 +184,8 @@ bool mouse_move(double x, double y, bool relative) {
 }
 
 bool scroll(double dx, double dy) {
+    if (!wanted && mods::on_scroll(dy, playing()))
+        return true;
     if (wanted && ready)
         ImGui::GetIO().AddMouseWheelEvent(float(dx), float(dy));
     return wanted;
@@ -133,7 +196,9 @@ void frame(EGLDisplay display, EGLSurface surface) {
     float dt = last_frame.time_since_epoch().count() ? std::chrono::duration<float>(now - last_frame).count() : 1 / 60.f;
     dt = std::clamp(dt, 1 / 1000.f, 0.25f);
     last_frame = now;
-    if (!wanted)
+    mods::tick(dt);
+    // the HUDs show over a world being played, not over the game's screens
+    if (!wanted && !(mods::hud_visible() && playing()))
         return;
 
     EGLint w = 0, h = 0;
@@ -159,11 +224,14 @@ void frame(EGLDisplay display, EGLSurface surface) {
     ImGuiIO& io = ImGui::GetIO();
     io.DisplaySize = size;
     io.DeltaTime = dt;
-    io.MouseDrawCursor = relative_mouse;
+    io.MouseDrawCursor = relative_mouse && wanted;
 
     ImGui_ImplOpenGL3_NewFrame();
     ImGui::NewFrame();
-    draw(size);
+    if (wanted)
+        draw(size, dt);
+    else
+        mods::draw_hud(ImGui::GetForegroundDrawList(), scale * 1.5f, ImGui::GetFont());
     ImGui::Render();
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }

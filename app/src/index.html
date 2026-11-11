@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Talaz</title>
+<style>
+:root { --accent: #4FD8C4; --text: #E8EEF2; --muted: #9AA9B5; --ink: #10171D; --deep: #0C1217; --line: #1E2A33; }
+* { box-sizing: border-box; }
+body { margin: 0; height: 100vh; display: flex; flex-direction: column; background: var(--deep); color: var(--text); font: 14px system-ui, sans-serif; user-select: none; overflow: hidden; }
+header { display: flex; align-items: center; gap: 12px; padding: 28px 32px; }
+header span { font-weight: 600; font-size: 22px; letter-spacing: -0.5px; }
+main { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; }
+h1 { margin: 0; font-size: 44px; font-weight: 600; letter-spacing: -1.5px; }
+p { margin: 0; color: var(--muted); min-height: 20px; }
+.row { display: flex; gap: 8px; }
+select, button { height: 48px; border-radius: 24px; font: inherit; }
+select { padding: 0 16px; border: 1px solid var(--line); background: var(--ink); color: var(--text); }
+button { padding: 0 36px; border: 0; background: var(--text); color: var(--deep); font-weight: 600; font-size: 15px; cursor: pointer; }
+button:disabled { opacity: 0.5; cursor: default; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sea { position: absolute; left: 0; right: 0; bottom: 0; height: 120px; z-index: -1; }
+</style>
+</head>
+<body>
+<header>
+<svg aria-hidden="true" width="26" height="26" viewBox="0 0 26 26" fill="none" stroke="#4FD8C4" stroke-width="2.4" stroke-linecap="round"><path d="M2 10c4-5 7-5 11 0s7 5 11 0"/><path d="M2 18c4-5 7-5 11 0s7 5 11 0"/></svg>
+<span>talaz</span>
+</header>
+<main>
+<h1>Minecraft Bedrock</h1>
+<div class="row">
+<select id="version" aria-label="Game version"></select>
+<button id="play">Play</button>
+</div>
+<p id="status" role="status"></p>
+</main>
+<svg class="sea" aria-hidden="true" viewBox="0 0 960 120" preserveAspectRatio="none"><path d="M0 120V40c80-32 160-32 240 0s160 32 240 0 160-32 240 0 160 32 240 0v80z" fill="#4FD8C4" fill-opacity="0.22"/></svg>
+<script>
+const { invoke } = window.__TAURI__.core;
+const version = document.getElementById('version'), play = document.getElementById('play'), status = document.getElementById('status');
+
+invoke('versions').then((list) => {
+  for (const name of list) version.add(new Option(name, name));
+  const last = localStorage.getItem('version');
+  if (list.includes(last)) version.value = last;
+  if (!list.length) {
+    play.disabled = true;
+    status.textContent = 'No game version found. Download one in Minecraft Bedrock Launcher first.';
+  }
+});
+
+play.onclick = async () => {
+  localStorage.setItem('version', version.value);
+  play.disabled = true;
+  try {
+    await invoke('play', { version: version.value });
+    status.textContent = 'Starting the game...';
+  } catch (err) {
+    status.textContent = String(err);
+  }
+  setTimeout(() => (play.disabled = false), 3000);
+};
+</script>
+</body>
+</html>

@@ -6,7 +6,8 @@ Talaz runs the Android build of Bedrock through [mcpelauncher](https://github.co
 
 ## Layout
 
-- `mod/` is the in-game mod, a C++ library mcpelauncher loads next to the game. It draws with Dear ImGui. Right Shift opens the menu, which is a placeholder for now.
+- `mod/` is the in-game mod, a C++ library mcpelauncher loads next to the game. It draws with Dear ImGui. Right Shift opens the menu.
+- `app/` is the launcher, a Tauri app. It starts the game with the mod loaded.
 
 ## Building the mod
 
@@ -21,6 +22,16 @@ cmake --build mod/build/arm64 -j8
 ```
 
 Use `-DANDROID_ABI=x86_64` on Linux. The result is `libtalaz_bedrock.so`, which goes in mcpelauncher's `mods` folder.
+
+## Running the launcher
+
+You need Rust, and Minecraft Bedrock Launcher installed with a game version downloaded. Build the mod first.
+
+```bash
+cd app/src-tauri && cargo run
+```
+
+`TALAZ_PREVIEW=1` in the game's environment opens the menu at startup, without entering a world.
 
 ## License
 
