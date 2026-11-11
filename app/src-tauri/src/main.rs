@@ -379,25 +379,21 @@ fn start_screen(vanilla: &str) -> Option<String> {
         ours.push(json!({format!("talaz_{name}@common_buttons.light_text_button"): button}));
     }
     theirs.push(mark("talaz_vanilla_mark", [3.0, 1.0, 254.0], "0%", "0%"));
-    // a radio pair switches the two screens: the way to the game's sits in Talaz's top row, the way back in its corner.
-    // The group starts on the second toggle, Talaz's screen; forcing indexes made 1.21.114 press the screen's buttons by itself
-    let switch = |name: &str, index: u32, x: f64| {
-        let mut toggle = place(x, 0.03, 0.035, 0.06);
-        let fields = json!({"type": "toggle", "layer": 50, "radio_toggle_group": true, "toggle_name": "talaz_screen",
-            "toggle_group_default_selected": 1, "toggle_default_state": index == 0, "checked_control": "on", "unchecked_control": "off",
-            "checked_hover_control": "on", "unchecked_hover_control": "off", "controls": [{"on": {"type": "panel"}}, {"off": {"type": "panel"}}],
-            "button_mappings": [{"from_button_id": "button.menu_select", "to_button_id": "button.menu_select", "mapping_type": "pressed"},
-                {"from_button_id": "button.menu_ok", "to_button_id": "button.menu_ok", "mapping_type": "focused"}]});
-        toggle.as_object_mut().map(|o| o.extend(fields.as_object().cloned().unwrap_or_default()));
-        json!({name: toggle})
-    };
-    ours.push(switch("talaz_to_vanilla", 1, 0.865));
-    theirs.push(switch("talaz_to_talaz", 0, 0.945));
+    // one toggle outside both screens switches them, on the same spot in each: Talaz's top row,
+    // where the mod draws a cube on its screen and the way back on the game's
+    let mut toggle = place(0.865, 0.03, 0.035, 0.06);
+    let fields = json!({"type": "toggle", "layer": 50, "toggle_name": "talaz_screen", "toggle_default_state": false,
+        "checked_control": "on", "unchecked_control": "off", "checked_hover_control": "on", "unchecked_hover_control": "off",
+        "controls": [{"on": {"type": "panel"}}, {"off": {"type": "panel"}}],
+        "button_mappings": [{"from_button_id": "button.menu_select", "to_button_id": "button.menu_select", "mapping_type": "pressed"},
+            {"from_button_id": "button.menu_ok", "to_button_id": "button.menu_ok", "mapping_type": "focused"}]});
+    toggle.as_object_mut()?.extend(fields.as_object()?.clone());
     let shown_when = |on: bool| json!([{"binding_type": "view", "source_control_name": "talaz_to_vanilla",
         "source_property_name": if on { "#toggle_state" } else { "(not #toggle_state)" }, "target_property_name": "#visible"}]);
     let ui = json!({"namespace": "start", "start_screen_content": {"controls": [
         {"talaz_screen": {"type": "panel", "bindings": shown_when(false), "controls": ours}},
         {"vanilla_screen": {"type": "panel", "bindings": shown_when(true), "controls": theirs}},
+        {"talaz_to_vanilla": toggle},
     ]}});
     serde_json::to_string(&ui).ok()
 }

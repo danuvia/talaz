@@ -189,8 +189,8 @@ bool draw(ImDrawList* dl, ImVec2 d, ImVec2 mouse, bool clicked, float time) {
     float u = d.y / 720;
     dl->AddRectFilled(ImVec2(0, 0), ImVec2(12, 12), IM_COL32(beside[0], beside[1], beside[2], 255));
     if (vanilla) {
-        // the way back to Talaz, in the game's own corner
-        static const Button back{nullptr, "waves", 0.945f, 0.03f, 0.035f, 0.06f, ICON};
+        // the way back to Talaz, on the same spot as the switch on Talaz's screen
+        static const Button back{nullptr, "waves", 0.865f, 0.03f, 0.035f, 0.06f, ICON};
         draw_button(dl, back, d, mouse, u);
         return false;
     }
