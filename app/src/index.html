@@ -134,6 +134,11 @@ h1 { font-size: 84px; line-height: 1; letter-spacing: -4px; margin: 10px 0 30px 
 #log-lines .err { color: #E8B45A; }
 #log-lines .times { color: var(--accent); font-weight: 400; }
 #log-state.on { color: var(--accent); }
+
+/* whole-screen mode: the notch's row is ours too, so the bar and pages start below it.
+   --notch is its height, 0 without a notch */
+header { margin-top: var(--notch, 0px); }
+.page { top: calc(64px + var(--notch, 0px)); }
 </style>
 </head>
 <body>
@@ -565,6 +570,14 @@ function flow(now) {
   requestAnimationFrame(flow);
 }
 requestAnimationFrame(flow);
+
+// the whole-screen mode: the top bar steps below the notch, Esc leaves
+let full = false;
+listen('full', ({ payload }) => {
+  full = payload !== 0;
+  document.body.style.setProperty('--notch', `${payload}px`);
+});
+document.addEventListener('keydown', (event) => event.key === 'Escape' && full && invoke('leave_full'));
 
 // the window moves from any empty spot. Moved by hand: macOS drops startDragging when the call lands after the click
 let drag = null;

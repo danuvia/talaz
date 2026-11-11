@@ -3200,6 +3200,9 @@ dependencies = [
 name = "talaz"
 version = "0.1.0"
 dependencies = [
+ "objc2",
+ "objc2-app-kit",
+ "objc2-foundation",
  "prost",
  "serde",
  "serde_json",

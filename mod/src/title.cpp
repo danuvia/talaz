@@ -33,7 +33,7 @@ const Button buttons[] = {
         {"Mods", "waves", 0.21f, 0.73f, 0.13f, 0.065f, PLAIN, true},
         {"Profile", "profile", 0.74f, 0.88f, 0.115f, 0.065f, PLAIN},
         {"Wardrobe", "wardrobe", 0.865f, 0.88f, 0.115f, 0.065f, PLAIN},
-        // the top row: the game's own screen, inbox, quit
+        // the top row: the switch to the game's own screen first, then inbox and quit
         {nullptr, "cube", 0.865f, 0.03f, 0.035f, 0.06f, ICON},
         {nullptr, "bell", 0.905f, 0.03f, 0.035f, 0.06f, ICON},
         {nullptr, "close", 0.945f, 0.03f, 0.035f, 0.06f, ICON},
@@ -189,8 +189,8 @@ bool draw(ImDrawList* dl, ImVec2 d, ImVec2 mouse, bool clicked, float time) {
     float u = d.y / 720;
     dl->AddRectFilled(ImVec2(0, 0), ImVec2(12, 12), IM_COL32(beside[0], beside[1], beside[2], 255));
     if (vanilla) {
-        // the way back to Talaz, on the same spot as the switch on Talaz's screen
-        static const Button back{nullptr, "waves", 0.865f, 0.03f, 0.035f, 0.06f, ICON};
+        // the way back to Talaz, at the right end of the row
+        static const Button back{nullptr, "waves", 0.945f, 0.03f, 0.035f, 0.06f, ICON};
         draw_button(dl, back, d, mouse, u);
         return false;
     }

@@ -373,15 +373,17 @@ fn start_screen(vanilla: &str) -> Option<String> {
     let mut ours = vec![mark("talaz_mark", [1.0, 254.0, 3.0], "0%", "0%"), mark("talaz_mark_middle", [1.0, 254.0, 3.0], "50%", "56%")];
     for &(name, target, x, y, w, h) in TITLE_BUTTONS {
         let mut button = place(x, y, w, h);
-        let fields = json!({"$pressed_button_name": target, "$button_text": "", "$default_button_texture": clear, "$hover_button_texture": clear,
+        // above the screen switch, which lies under the whole top row
+        let fields = json!({"layer": 60, "$pressed_button_name": target, "$button_text": "", "$default_button_texture": clear, "$hover_button_texture": clear,
             "$pressed_button_texture": clear, "$locked_button_texture": clear, "$border_visible": false});
         button.as_object_mut()?.extend(fields.as_object()?.clone());
         ours.push(json!({format!("talaz_{name}@common_buttons.light_text_button"): button}));
     }
     theirs.push(mark("talaz_vanilla_mark", [3.0, 1.0, 254.0], "0%", "0%"));
-    // one toggle outside both screens switches them, on the same spot in each: Talaz's top row,
-    // where the mod draws a cube on its screen and the way back on the game's
-    let mut toggle = place(0.865, 0.03, 0.035, 0.06);
+    // one toggle outside both screens switches them. It lies under the whole top row: on Talaz's
+    // screen the inbox and quit buttons sit above it and its left end, the cube, is what's left;
+    // the game's screen has nothing there, so the way back can sit at the right end
+    let mut toggle = place(0.865, 0.03, 0.115, 0.06);
     let fields = json!({"type": "toggle", "layer": 50, "toggle_name": "talaz_screen", "toggle_default_state": false,
         "checked_control": "on", "unchecked_control": "off", "checked_hover_control": "on", "unchecked_hover_control": "off",
         "controls": [{"on": {"type": "panel"}}, {"off": {"type": "panel"}}],
@@ -541,9 +543,51 @@ fn play(app: tauri::AppHandle, version: String, width: u32, height: u32) -> Resu
     Ok(())
 }
 
+/// Whether the window covers the whole screen the way OneClient's does
+static FULL: AtomicBool = AtomicBool::new(false);
+
+/// How far the notch reaches into the top of the screen, in points; nothing on screens without one
+#[cfg(target_os = "macos")]
+fn notch() -> f64 {
+    objc2::MainThreadMarker::new().and_then(objc2_app_kit::NSScreen::mainScreen).map_or(0.0, |screen| screen.safeAreaInsets().top)
+}
+#[cfg(not(target_os = "macos"))]
+fn notch() -> f64 {
+    0.0
+}
+
+/// Leaves the whole-screen mode, from Esc on the page
+#[tauri::command]
+fn leave_full(window: tauri::Window) {
+    if FULL.swap(false, Ordering::SeqCst) {
+        let _ = window.set_simple_fullscreen(false);
+        let _ = window.emit("full", 0.0);
+    }
+}
+
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![state, play, set_mod, set_option, remove, notes, warning, faster_graphics, open_game_folder, pick_folder, finish_setup, play::available, play::sign_in, play::sign_out, play::install])
+        // macOS's own full screen leaves the notch's row black; the green button goes to the older
+        // whole-screen mode instead, which hides the menu bar and covers that row too
+        .on_window_event(|window, event| {
+            if !matches!(event, tauri::WindowEvent::Resized(_)) || !window.is_fullscreen().unwrap_or(false) || FULL.swap(true, Ordering::SeqCst) {
+                return;
+            }
+            let window = window.clone();
+            std::thread::spawn(move || {
+                // let macOS finish its own animation before stepping out of it
+                std::thread::sleep(std::time::Duration::from_millis(700));
+                let _ = window.set_fullscreen(false);
+                std::thread::sleep(std::time::Duration::from_millis(700));
+                let _ = window.set_simple_fullscreen(true);
+                // the page leaves the notch's height free at the top, read where AppKit wants it, on the main thread
+                let main = window.clone();
+                let _ = window.run_on_main_thread(move || {
+                    let _ = main.emit("full", notch());
+                });
+            });
+        })
+        .invoke_handler(tauri::generate_handler![state, play, set_mod, set_option, remove, notes, warning, faster_graphics, open_game_folder, pick_folder, finish_setup, leave_full, play::available, play::sign_in, play::sign_out, play::install])
         .run(tauri::generate_context!())
         .expect("failed to start Talaz");
 }
