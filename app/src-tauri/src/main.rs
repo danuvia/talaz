@@ -21,11 +21,28 @@ fn version_dirs() -> Vec<PathBuf> {
     root().into_iter().chain(theirs).map(|dir| dir.join("versions")).collect()
 }
 
-// ponytail: the mod is loaded from the repo's build folder. Bundle it with the app for releases
+/// The mod, built before the launcher and carried inside it
+#[cfg(target_arch = "aarch64")]
+const MOD: &[u8] = include_bytes!("../../../mod/build/arm64/libtalaz_bedrock.so");
+#[cfg(target_arch = "x86_64")]
+const MOD: &[u8] = include_bytes!("../../../mod/build/x86_64/libtalaz_bedrock.so");
+
+/// Where the game loads the mod from. The mod keeps its settings next to itself
 fn mods_dir() -> Option<PathBuf> {
-    let abi = if cfg!(target_arch = "aarch64") { "arm64" } else { "x86_64" };
-    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../mod/build").join(abi);
-    dir.exists().then_some(dir)
+    Some(root()?.join("mod"))
+}
+
+/// Writes the mod out when it is missing or from another build of Talaz
+fn place_mod() -> Result<PathBuf, String> {
+    let dir = mods_dir().ok_or("No home folder")?;
+    let lib = dir.join("libtalaz_bedrock.so");
+    if std::fs::read(&lib).ok().as_deref() != Some(MOD) {
+        std::fs::create_dir_all(&dir).map_err(|err| err.to_string())?;
+        // a running game still has the old file open, so swap it instead of writing into it
+        let part = dir.join("libtalaz_bedrock.so.part");
+        std::fs::write(&part, MOD).and_then(|_| std::fs::rename(&part, &lib)).map_err(|err| err.to_string())?;
+    }
+    Ok(dir)
 }
 
 fn version_key(version: &str) -> Vec<u32> {
@@ -108,7 +125,8 @@ fn set_mod(id: String, on: bool) -> Result<(), String> {
     if !MODS.iter().any(|(known, ..)| *known == id) {
         return Err("No such mod".into());
     }
-    let file = profile_file().ok_or("The mod is not built")?;
+    let file = profile_file().ok_or("No home folder")?;
+    std::fs::create_dir_all(mods_dir().ok_or("No home folder")?).map_err(|err| err.to_string())?;
     let text = std::fs::read_to_string(&file).unwrap_or_default();
     std::fs::write(file, ini_set(&text, &format!("{id}.enabled"), on as u8 as f32)).map_err(|err| err.to_string())
 }
@@ -148,9 +166,7 @@ fn play(app: tauri::AppHandle, version: String, width: u32, height: u32) -> Resu
         }
         cmd.arg("-dd").arg(data).arg("-ww").arg(width.clamp(640, 7680).to_string()).arg("-wh").arg(height.clamp(360, 4320).to_string());
     }
-    if let Some(mods) = mods_dir() {
-        cmd.arg("-m").arg(mods);
-    }
+    cmd.arg("-m").arg(place_mod()?);
     cmd.spawn().map(drop).map_err(|err| err.to_string())
 }
 
@@ -163,6 +179,13 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    #[ignore = "writes into the real Talaz folder"]
+    fn the_mod_is_placed() {
+        let dir = super::place_mod().unwrap();
+        assert_eq!(std::fs::read(dir.join("libtalaz_bedrock.so")).unwrap(), super::MOD);
+    }
+
     #[test]
     fn a_setting_is_replaced_not_repeated() {
         let text = super::ini_set("zoom.enabled=0\nzoom.factor=4\n", "zoom.enabled", 1.0);

@@ -21,7 +21,7 @@ cmake -S mod -B mod/build/arm64 -DCMAKE_TOOLCHAIN_FILE="$NDK/build/cmake/android
 cmake --build mod/build/arm64 -j8
 ```
 
-Use `-DANDROID_ABI=x86_64` on Linux. The result is `libtalaz_bedrock.so`, which goes in mcpelauncher's `mods` folder.
+On Linux use `-DANDROID_ABI=x86_64` and `mod/build/x86_64`. The result is `libtalaz_bedrock.so`. The launcher carries it inside itself and writes it next to the game's data on Play.
 
 ## Running the launcher
 
