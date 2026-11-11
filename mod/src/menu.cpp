@@ -5,6 +5,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
+#include <cstring>
 #include <string>
 
 #include "assets.h"
@@ -258,6 +259,18 @@ void draw(ImVec2 size, float dt) {
                 dl->PathLineTo(ImVec2(x, b.y - edge(x)));
             dl->PathLineTo(ImVec2(x0, b.y - edge(x0)));
             dl->PathFillConcave(WATER);
+            // Riptide's current: streaks racing through its water while it's on
+            if (on && m.cover >= 1 && std::strcmp(m.id, "riptide") == 0) {
+                // in the band of water above the note, so they never cross its words
+                float top = b.y - H * m.level + 5 * u, floor = b.y - 46 * u;
+                for (int k = 0; k < 3; k++) {
+                    float lane = top + (floor - top) * (0.15f + 0.35f * k), len = 26 * u + 9 * u * (k % 3);
+                    float x = a.x + std::fmod(time * (220 + 70 * k) * u + k * 97 * u, W + len) - len;
+                    float x1 = std::clamp(x, a.x + r, b.x - r), x2 = std::clamp(x + len, a.x + r, b.x - r);
+                    if (x2 > x1 && lane < b.y - edge(x2) - 2 * u)
+                        dl->AddLine(ImVec2(x1, lane), ImVec2(x2, lane), IM_COL32(79, 216, 196, 150), std::max(1.f, 1.6f * u));
+                }
+            }
         }
         dl->AddRect(a, b, on ? ACCENT : hover ? MUTED : LINE, r, 0, std::max(1.f, u));
         dl->AddText(font, 15 * u, ImVec2(a.x + 16 * u, a.y + 14 * u), TEXT, m.name);
@@ -368,6 +381,7 @@ void frame(EGLDisplay display, EGLSurface surface) {
     dt = std::clamp(dt, 1 / 1000.f, 0.25f);
     last_frame = now;
     mods::tick(dt);
+    mods::riptide(surface);
     step_water(dt);
     mods::limit_fps();
     // the HUDs show over a world being played, not over the game's screens; off a

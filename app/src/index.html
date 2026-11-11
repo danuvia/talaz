@@ -75,6 +75,13 @@ h1 { font-size: 84px; line-height: 1; letter-spacing: -4px; margin: 10px 0 30px 
 .tile small { position: relative; z-index: 1; margin-top: 6px; color: var(--muted); font-size: 13px; line-height: 1.45; }
 .tile em { position: relative; z-index: 1; margin-top: auto; font-style: normal; font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); transition: color 0.3s; }
 .tile[aria-checked=true] em { color: var(--accent); }
+/* Riptide's current: streaks racing through its water while it's on */
+#mod-riptide[aria-checked=true]::after { content: ""; position: absolute; left: 0; right: 0; bottom: 22%; height: 12%; pointer-events: none;
+  background: repeating-linear-gradient(90deg, transparent 0 46px, rgba(79, 216, 196, 0.55) 46px 78px, transparent 78px 130px) 0 30% / 260px 2px no-repeat,
+              repeating-linear-gradient(90deg, transparent 0 70px, rgba(79, 216, 196, 0.4) 70px 92px, transparent 92px 170px) 0 65% / 340px 2px no-repeat;
+  background-repeat: repeat-x; animation: current 0.9s linear infinite; }
+@keyframes current { to { background-position: 260px 30%, 340px 65%; } }
+@media (prefers-reduced-motion: reduce) { #mod-riptide[aria-checked=true]::after { animation: none; } }
 .tile .water { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; fill: var(--water); }
 
 /* lists */
@@ -206,7 +213,6 @@ talaz
 <div class="rows">
 <div class="list">
 <div class="row"><div>Game window<small>The size the game opens at</small></div><select id="size" aria-label="Game window size"></select></div>
-<div class="row"><div>Riptide<small>Lifts the frame pacing mcpelauncher adds on a Mac and the game's developer file watcher. About 2.4 times the frame rate. Pair it with FPS Limit to keep the laptop cool</small></div><button class="btn" id="riptide"></button></div>
 <div class="row"><div>Faster graphics<small>Turns off vsync, fancy skies, smooth lighting, fancy leaves and clouds, and shortens the view to 10 chunks. Close the game first</small></div><button class="btn" id="faster">Apply</button></div>
 <div class="row"><div>Google Play<small id="who"></small></div><button class="btn" id="sign"></button></div>
 <div class="row"><div>Game folder<small>Worlds, resource packs and screenshots</small></div><button class="btn" id="folder">Open</button></div>
@@ -300,7 +306,6 @@ function draw() {
   $('chip').replaceChildren(el('b', {}, state.email ? state.email[0] : '?'), el('span', {}, state.email ?? 'Sign in'));
   $('chip').dataset.page = 'settings';
   $('who').textContent = state.email ?? 'Not signed in';
-  $('riptide').textContent = state.riptide ? 'On' : 'Off';
   $('sign').textContent = state.email ? 'Sign out' : 'Sign in';
   $('sign').disabled = busy;
 
@@ -409,7 +414,6 @@ listen('signed-in', async ({ payload }) => {
 });
 
 $('sign').onclick = () => (state.email ? run('Signed out', () => invoke('sign_out')) : signIn());
-$('riptide').onclick = () => run(state.riptide ? 'Riptide is off from the next start' : 'Riptide is on from the next start', () => invoke('set_riptide', { on: !state.riptide }));
 $('faster').onclick = () => invoke('faster_graphics').then(() => say('The game will start with faster graphics'), (err) => say(String(err)));
 $('folder').onclick = () => invoke('open_game_folder').catch((err) => say(String(err)));
 

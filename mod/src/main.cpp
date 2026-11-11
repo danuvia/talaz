@@ -73,8 +73,11 @@ extern "C" [[gnu::visibility("default")]] void mod_init() {
         load(api, host_dlopen, "mcpelauncher_host_dlopen");
         load(api, host_dlsym, "mcpelauncher_host_dlsym");
         if (host_dlopen && host_dlsym)
-            if (void* launcher = host_dlopen(nullptr, RTLD_NOW))
+            if (void* launcher = host_dlopen(nullptr, RTLD_NOW)) {
                 menubar = static_cast<const int*>(host_dlsym(launcher, "_ZN8Settings11menubarsizeE"));
+                // Riptide sets the window's swap interval through the launcher's own window class
+                mods::set_swap_interval_function(host_dlsym(launcher, "_ZN14GLFWGameWindow15setSwapIntervalEi"));
+            }
     }
     menu::connect(is_mouse_locked ? +[] { return is_mouse_locked(get_primary_window()); } : nullptr, menubar);
 

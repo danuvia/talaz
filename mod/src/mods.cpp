@@ -42,6 +42,7 @@ Mod list[] = {
         {"togglesprint", "Toggle Sprint", "Press Ctrl once to keep sprinting"},
         {"nightvision", "Night Vision", "Brightens the picture so caves and nights are easy to see"},
         {"motionblur", "Motion Blur", "Smears the world the way the camera turns"},
+        {"riptide", "Riptide", "Breaks the launcher's hidden frame cap, for about three times the frame rate"},
         {"camerasway", "Camera Sway", "Tilts the camera as you strafe and kicks it up on a jump"},
 };
 
@@ -676,8 +677,9 @@ void toggle(const char* id) {
 }
 
 void declare() {
+    // Riptide is on until turned off; every other mod starts off
     for (const Mod& mod : list)
-        config::declare(std::string(mod.id) + ".enabled", 0);
+        config::declare(std::string(mod.id) + ".enabled", std::strcmp(mod.id, "riptide") == 0);
     config::declare("fpslimit.cap", 60);
     config::declare("motionblur.amount", 50);
     config::declare("key.zoom", 'C');
@@ -853,6 +855,28 @@ void draw_effects(ImDrawList*) {}
 
 bool hud_visible() {
     return std::any_of(std::begin(HUDS), std::end(HUDS), [](const char* hud) { return enabled(hud); });
+}
+
+// Riptide. mcpelauncher decides on a Mac that vsync is broken and paces frames itself,
+// sleeping after each one, which held the game near 190 fps; a swap interval of 0
+// turns that off, and 1 puts it back. The game's own vsync setting never reaches the
+// window, so the mod sets it on the window directly
+using SetSwapInterval = void (*)(void*, int);
+SetSwapInterval set_swap_interval = nullptr;
+
+void set_swap_interval_function(void* function) {
+    set_swap_interval = reinterpret_cast<SetSwapInterval>(function);
+}
+
+void riptide(void* window) {
+    static int applied = -1;
+    int want = enabled("riptide") ? 0 : 1;
+    // only on the window class whose method this is: its vtable's swap interval slot must hold it
+    if (!set_swap_interval || !window || want == applied || (*static_cast<void***>(window))[14] != reinterpret_cast<void*>(set_swap_interval))
+        return;
+    set_swap_interval(window, want);
+    applied = want;
+    __android_log_print(ANDROID_LOG_INFO, CLIENT_NAME, "Riptide %s", want ? "off" : "on");
 }
 
 bool paper_doll() {

@@ -110,11 +110,15 @@ const MODS: &[(&str, &str, &str)] = &[
     ("togglesprint", "Toggle Sprint", "Press Ctrl once to keep sprinting"),
     ("nightvision", "Night Vision", "Brightens the picture so caves and nights are easy to see"),
     ("motionblur", "Motion Blur", "Smears the world the way the camera turns"),
+    ("riptide", "Riptide", "Breaks the launcher's hidden frame cap, for about three times the frame rate"),
     ("camerasway", "Camera Sway", "Tilts the camera as you strafe and kicks it up on a jump"),
 ];
 
 /// The one setting a mod has in the launcher: mod, key, unit, default and the values to pick from.
 /// The defaults are the mod's own, from mod/src/mods.cpp
+/// The mods on until turned off
+const DEFAULT_ON: &[&str] = &["riptide"];
+
 const OPTIONS: &[(&str, &str, &str, f32, &[f32])] = &[
     ("zoom", "zoom.factor", "×", 4.0, &[2.0, 3.0, 4.0, 6.0, 8.0]),
     ("fpslimit", "fpslimit.cap", " fps", 60.0, &[30.0, 60.0, 90.0, 120.0, 144.0, 240.0]),
@@ -163,7 +167,6 @@ struct State {
     email: Option<String>,
     mods: Vec<Mod>,
     running: bool,
-    riptide: bool,
     /// false until the first-run setup is done
     set_up: bool,
     game_folder: String,
@@ -177,10 +180,9 @@ fn state() -> State {
         versions: installed().into_iter().map(|(name, path)| (name, own.as_deref().is_some_and(|own| path.starts_with(own)))).collect(),
         email: play::email(),
         running: RUNNING.load(Ordering::SeqCst),
-        riptide: riptide(),
         set_up: game_folder_file().is_some_and(|file| file.exists()),
         game_folder: game_dir().map(|dir| dir.display().to_string()).unwrap_or_default(),
-        mods: MODS.iter().map(|&(id, name, note)| Mod { id, name, note, on: ini_get(&settings, &format!("{id}.enabled")).is_some_and(|v| v != 0.0), option: OPTIONS.iter().find(|(of, ..)| *of == id).map(|&(_, key, unit, default, choices)| Opt { key, unit, value: ini_get(&settings, key).unwrap_or(default), choices }) }).collect(),
+        mods: MODS.iter().map(|&(id, name, note)| Mod { id, name, note, on: ini_get(&settings, &format!("{id}.enabled")).map_or(DEFAULT_ON.contains(&id), |v| v != 0.0), option: OPTIONS.iter().find(|(of, ..)| *of == id).map(|&(_, key, unit, default, choices)| Opt { key, unit, value: ini_get(&settings, key).unwrap_or(default), choices }) }).collect(),
     }
 }
 
@@ -272,50 +274,6 @@ const FASTER: &[(&str, &str)] = &[
     ("gfx_viewdistance", "160"),
     ("gfx_toggleclouds", "0"),
 ];
-
-/// Riptide: off when this file exists. On by default
-fn riptide_off_file() -> Option<PathBuf> {
-    Some(root()?.join("riptide-off"))
-}
-
-fn riptide() -> bool {
-    !riptide_off_file().is_some_and(|file| file.exists())
-}
-
-#[tauri::command]
-fn set_riptide(on: bool) -> Result<(), String> {
-    let file = riptide_off_file().ok_or("No home folder")?;
-    if on {
-        let _ = std::fs::remove_file(file);
-        Ok(())
-    } else {
-        std::fs::write(file, "").map_err(|err| err.to_string())
-    }
-}
-
-/// mcpelauncher's settings with its vsync set: on a Mac it decides vsync is broken and paces frames
-/// itself, sleeping after each one, which held the game near 190 fps; off, the game ran at 450
-fn with_vsync(settings: &str, vsync: bool) -> String {
-    let mut out: String = settings.lines().filter(|line| !line.starts_with("vsync=")).map(|line| format!("{line}\n")).collect();
-    if !vsync {
-        out.push_str("vsync=false\n");
-    }
-    out
-}
-
-/// Applies Riptide to the game folder before a start: mcpelauncher's own frame pacing off, and the
-/// game's developer file watcher, which keeps checking its files for edits, off too
-fn apply_riptide(data: &std::path::Path) -> Result<(), String> {
-    let on = riptide();
-    let settings = data.join("mcpelauncher-client-settings.txt");
-    let text = std::fs::read_to_string(&settings).unwrap_or_default();
-    std::fs::write(&settings, with_vsync(&text, !on)).map_err(|err| err.to_string())?;
-    let options = data.join("games/com.mojang/minecraftpe/options.txt");
-    if let Ok(text) = std::fs::read_to_string(&options) {
-        let _ = std::fs::write(&options, options_set(&text, &[("dev_file_watcher", if on { "0" } else { "1" })]));
-    }
-    Ok(())
-}
 
 /// The game's options.txt with some values changed; a setting the game has not written yet is left alone
 fn options_set(text: &str, values: &[(&str, &str)]) -> String {
@@ -549,7 +507,6 @@ fn play(app: tauri::AppHandle, version: String, width: u32, height: u32) -> Resu
             std::fs::create_dir_all(&data).map_err(|err| err.to_string())?;
             std::fs::write(&settings, "enable_menubar=false\n").map_err(|err| err.to_string())?;
         }
-        apply_riptide(&data)?;
         // without the pack the game shows its own title screen, so a failure here is not worth stopping for
         let _ = install_pack(&data, &game);
         cmd.arg("-dd").arg(data).arg("-ww").arg(width.clamp(640, 7680).to_string()).arg("-wh").arg(height.clamp(360, 4320).to_string());
@@ -650,7 +607,7 @@ fn main() {
                 });
             });
         })
-        .invoke_handler(tauri::generate_handler![state, play, set_mod, set_option, remove, notes, warning, faster_graphics, open_game_folder, pick_folder, finish_setup, leave_full, set_riptide, play::available, play::sign_in, play::sign_out, play::install])
+        .invoke_handler(tauri::generate_handler![state, play, set_mod, set_option, remove, notes, warning, faster_graphics, open_game_folder, pick_folder, finish_setup, leave_full, play::available, play::sign_in, play::sign_out, play::install])
         .run(tauri::generate_context!())
         .expect("failed to start Talaz");
 }
@@ -669,14 +626,6 @@ mod tests {
     fn install_the_pack_for_a_look() {
         let version = super::home().unwrap().join("Library/Application Support/mcpelauncher/versions/1.21.114.1");
         super::install_pack(&super::game_dir().unwrap(), &version).unwrap();
-    }
-
-    #[test]
-    fn riptide_sets_vsync_once() {
-        let text = "enable_menubar=false\nvsync=true\n";
-        assert_eq!(super::with_vsync(text, false), "enable_menubar=false\nvsync=false\n");
-        assert_eq!(super::with_vsync(&super::with_vsync(text, false), false), "enable_menubar=false\nvsync=false\n");
-        assert_eq!(super::with_vsync(text, true), "enable_menubar=false\n");
     }
 
     #[test]

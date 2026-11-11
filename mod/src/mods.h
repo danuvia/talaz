@@ -56,6 +56,10 @@ void on_mouse_button(int button, int action);
 void on_look(double dx, double dy);
 bool on_scroll(double dy, bool playing);
 
+// Riptide: the launcher's GLFWGameWindow::setSwapInterval, and the per-frame check that applies it
+void set_swap_interval_function(void* function);
+void riptide(void* window);
+
 // Called once per frame, before drawing
 void tick(float dt);
 bool hud_visible();
