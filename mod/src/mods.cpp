@@ -259,8 +259,7 @@ void camera_blur(GLint vp[4]) {
 // turning the camera rolls it a little, the roll building up while it turns and
 // fading by itself; starting to strafe gives it a short nudge; a jump tilts it
 // with the player's vertical speed. The finished world is turned and shifted,
-// which at these angles looks like turning the camera, and drawn a little larger
-// so its edges never show. The hand and HUD stay put
+// which at these angles looks like turning the camera. The hand and HUD stay put
 // ponytail: the jump is simulated from the key with Minecraft's jump speed and gravity, so a jump in water or in the air tilts too. Read the player's velocity once the mod finds it
 std::atomic<bool> jump_pressed{false};
 float sway_roll = 0, sway_pitch = 0;  // degrees, what is drawn
@@ -340,8 +339,10 @@ void sway_world(GLint vp[4]) {
     // a pitch of a degrees moves the picture by tan(a) over tan(fov / 2) of half its height
     float fov = last_fov > 30 && last_fov < 150 ? last_fov : 70;
     // a positive pitch looks up, so the picture slides down
-    float shift = std::clamp(0.5f * std::tan(sway_pitch * 3.14159265f / 180) / std::tan(fov * 3.14159265f / 360), -0.06f, 0.06f);
-    float grow = std::abs(std::cos(roll)) + std::abs(std::sin(roll)) * aspect + 2 * std::abs(shift);
+    float shift = std::clamp(0.5f * std::tan(sway_pitch * 3.14159265f / 180) / std::tan(fov * 3.14159265f / 360), -0.03f, 0.03f);
+    // not grown: at these angles the strip left at the edges is a few pixels, filled
+    // from the edge itself, and growing the picture showed as a zoom
+    float grow = 1;
     glBindTexture(GL_TEXTURE_2D, frame);
     glCopyTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, vp[0], vp[1], vp[2], vp[3], 0);
     glDisable(GL_BLEND);

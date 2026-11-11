@@ -22,7 +22,7 @@ namespace {
 
 // Key codes and actions as the launcher's game window reports them
 constexpr int KEY_ESCAPE = 27;
-constexpr int KEY_PRESS = 0;
+constexpr int KEY_PRESS = 0, KEY_RELEASE = 2;
 constexpr int BUTTON_PRESS = 0;
 
 // What the player asked for. Input arrives outside the frame, so the frame
@@ -303,7 +303,9 @@ bool key(int key, int action) {
         wanted = false;
         return true;
     }
-    return wanted || eaten;
+    // the menu keeps key presses from the game but lets releases through, so a key
+    // held when the menu opened doesn't stay held in the game after it closes
+    return (wanted && action != KEY_RELEASE) || eaten;
 }
 
 bool mouse_button(double x, double y, int button, int action) {
