@@ -364,13 +364,15 @@ fn start_screen(vanilla: &str) -> Option<String> {
     let mut theirs = parsed.get("start_screen_content")?.get("controls")?.as_array()?.clone();
     let pct = |v: f64| format!("{:.2}%", v * 100.0);
     let place = |x: f64, y: f64, w: f64, h: f64| json!({"anchor_from": "top_left", "anchor_to": "top_left", "size": [pct(w), pct(h)], "offset": [pct(x), pct(y)]});
-    // 2px marks the mod looks for, one colour on each screen; a dialog over the middle hides ours
+    // 2px marks the mod looks for, one colour on each screen, under buttons the mod paints solid:
+    // Talaz's inside Play, where a dialog over the middle of the screen also hides it, the game's
+    // inside the way back
     let mark = |name: &str, rgb: [f64; 3], x: &str, y: &str| {
         json!({name: {"type": "image", "texture": "textures/ui/talaz/white", "color": rgb.map(|c| c / 255.0), "size": [2, 2],
             "anchor_from": "top_left", "anchor_to": "top_left", "offset": [x, y], "layer": 100}})
     };
     let clear = "textures/ui/talaz/clear";
-    let mut ours = vec![mark("talaz_mark", [1.0, 254.0, 3.0], "0%", "0%"), mark("talaz_mark_middle", [1.0, 254.0, 3.0], "50%", "56%")];
+    let mut ours = vec![mark("talaz_mark", [1.0, 254.0, 3.0], "20%", "51%")];
     for &(name, target, x, y, w, h) in TITLE_BUTTONS {
         let mut button = place(x, y, w, h);
         // above the screen switch, which lies under the whole top row
@@ -379,7 +381,7 @@ fn start_screen(vanilla: &str) -> Option<String> {
         button.as_object_mut()?.extend(fields.as_object()?.clone());
         ours.push(json!({format!("talaz_{name}@common_buttons.light_text_button"): button}));
     }
-    theirs.push(mark("talaz_vanilla_mark", [3.0, 1.0, 254.0], "0%", "0%"));
+    theirs.push(mark("talaz_vanilla_mark", [3.0, 1.0, 254.0], "96%", "6%"));
     // the screen switch below lies under the whole top row; these take the clicks it shouldn't get,
     // a silent button pressing nothing, over the gaps beside the cube and left of the way back
     let block = |name: &str, x: f64, w: f64| {

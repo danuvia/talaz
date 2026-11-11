@@ -1,6 +1,9 @@
 #include "title.h"
 
+#include <android/log.h>
+
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstring>
 
@@ -39,8 +42,6 @@ const Button buttons[] = {
         {nullptr, "close", 0.945f, 0.03f, 0.035f, 0.06f, ICON},
 };
 
-// the screen's colour next to each mark, to paint over it
-unsigned char beside[4] = {}, beside_middle[4] = {};
 // the game's own title screen is up, behind the pack's switch
 bool vanilla = false;
 
@@ -125,7 +126,8 @@ void draw_button(ImDrawList* dl, const Button& b, ImVec2 d, ImVec2 mouse, float 
         dl->AddRectFilled(a, z, ACCENT, r);
         fg = DEEP;
     } else {
-        dl->AddRectFilled(a, z, hover ? IM_COL32(22, 32, 40, 235) : PANEL, r);
+        // icon buttons are solid: the way back hides the pack's mark
+        dl->AddRectFilled(a, z, hover ? IM_COL32(22, 32, 40, 255) : (b.kind == ICON ? INK : PANEL), r);
         dl->AddRect(a, z, hover ? ACCENT : LINE, r, 0, std::max(1.f, u));
         if (b.kind == ICON && !std::strcmp(b.icon, "close") && hover)
             fg = IM_COL32(232, 120, 120, 255);
@@ -162,22 +164,20 @@ void sea(ImDrawList* dl, ImVec2 d, float time) {
 bool showing() {
     GLint vp[4] = {};
     glGetIntegerv(GL_VIEWPORT, vp);
-    unsigned char px[4] = {};
-    // the mark is the pack's 2px square in the top-left corner: 1, 254, 3 on Talaz's
-    // screen, 3, 1, 254 on the game's own
-    glReadPixels(vp[0] + 1, vp[1] + vp[3] - 2, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, px);
-    int away = int(std::ceil(14.f * vp[3] / 720)) + 2;
-    glReadPixels(vp[0] + away, vp[1] + vp[3] - 2, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, beside);
-    vanilla = px[0] < 12 && px[1] < 12 && px[2] > 240;
-    if (vanilla)
-        return true;
-    if (!(px[0] < 12 && px[1] > 240 && px[2] < 14))
-        return false;
-    // the second mark sits mid-screen, where a dialog like the quit prompt covers it
-    int mx = vp[0] + vp[2] / 2 + 1, my = vp[1] + int(vp[3] * 0.44f) - 2;
-    glReadPixels(mx, my, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, px);
-    glReadPixels(mx + away, my, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, beside_middle);
-    return px[0] < 12 && px[1] > 240 && px[2] < 14;
+    // the pack's marks sit under buttons drawn solid: 1, 254, 3 inside Play on Talaz's screen,
+    // 3, 1, 254 inside the way back on the game's own. A dialog over the middle covers Play's
+    auto at = [&](float x, float y) {
+        unsigned char px[4] = {};
+        glReadPixels(vp[0] + int(x * vp[2]) + 1, vp[1] + int((1 - y) * vp[3]) - 2, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, px);
+        return std::array<int, 3>{px[0], px[1], px[2]};
+    };
+    auto ours = at(0.2f, 0.51f), theirs = at(0.96f, 0.06f);
+    vanilla = theirs[0] < 12 && theirs[1] < 12 && theirs[2] > 240;
+    bool shown = vanilla || (ours[0] < 12 && ours[1] > 240 && ours[2] < 14);
+    static int last = -1;
+    if (int now = vanilla ? 2 : shown; now != last)
+        __android_log_print(ANDROID_LOG_INFO, "Talaz", "Title screen: %s", now == 2 ? "the game's" : now ? "Talaz's" : "gone"), last = now;
+    return shown;
 }
 
 bool owns(ImVec2 point, ImVec2 display) {
@@ -188,17 +188,12 @@ bool owns(ImVec2 point, ImVec2 display) {
 
 bool draw(ImDrawList* dl, ImVec2 d, ImVec2 mouse, bool clicked, float time) {
     float u = d.y / 720;
-    // the marks grow with the game's interface scale, so the paint over them grows with the screen
-    float cover = std::ceil(14 * u);
-    dl->AddRectFilled(ImVec2(0, 0), ImVec2(cover, cover), IM_COL32(beside[0], beside[1], beside[2], 255));
     if (vanilla) {
         // the way back to Talaz, at the right end of the row
         static const Button back{nullptr, "waves", 0.945f, 0.03f, 0.035f, 0.06f, ICON};
         draw_button(dl, back, d, mouse, u);
         return false;
     }
-    float mx = std::round(d.x / 2), my = std::round(d.y * 0.56f);
-    dl->AddRectFilled(ImVec2(mx - cover / 2, my - cover / 2), ImVec2(mx + cover, my + cover), IM_COL32(beside_middle[0], beside_middle[1], beside_middle[2], 255));
 
     // the panorama stays, darkened on the left where the words are
     dl->AddRectFilledMultiColor(ImVec2(0, 0), ImVec2(d.x * 0.55f, d.y), IM_COL32(12, 18, 23, 225), IM_COL32(12, 18, 23, 0),
