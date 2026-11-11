@@ -9,6 +9,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <ctime>
 #include <deque>
@@ -616,7 +617,13 @@ bool in_code(const std::vector<Segment>& segs, const void* p) {
 
 std::span<Mod> all() { return list; }
 
-bool enabled(const char* id) { return config::on(std::string(id) + ".enabled"); }
+// TALAZ_BENCH_ONLY=fps,motionblur limits a benchmark to those mods; "none" turns them all off
+bool enabled(const char* id) {
+    static const char* only = std::getenv("TALAZ_BENCH_ONLY");
+    if (only)
+        return (std::string(",") + only + ",").find(std::string(",") + id + ",") != std::string::npos;
+    return config::on(std::string(id) + ".enabled");
+}
 
 // Every mod's settings, shown on its own page in the menu: a slider from min to
 // max, or a switch when there is no step
@@ -687,6 +694,10 @@ void declare() {
 }
 
 void limit_fps() {
+    // a benchmark measures the game, not the cap
+    static const bool bench = std::getenv("TALAZ_BENCH") != nullptr;
+    if (bench)
+        return;
     static Clock::time_point next;
     auto now = Clock::now();
     if (!enabled("fpslimit")) {
@@ -799,6 +810,10 @@ void tick(float dt) {
     fps_window += dt;
     if (fps_window >= 1) {
         fps = int(std::lround(frames / fps_window));
+        // TALAZ_BENCH=1 logs the frame rate every second, for comparing settings
+        static const bool bench = std::getenv("TALAZ_BENCH") != nullptr;
+        if (bench)
+            __android_log_print(ANDROID_LOG_INFO, CLIENT_NAME, "bench fps %d", fps);
         frames = 0;
         fps_window = 0;
     }

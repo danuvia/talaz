@@ -206,7 +206,8 @@ talaz
 <div class="rows">
 <div class="list">
 <div class="row"><div>Game window<small>The size the game opens at</small></div><select id="size" aria-label="Game window size"></select></div>
-<div class="row"><div>Faster graphics<small>Turns off vsync, fancy skies, smooth lighting and fancy leaves, and shortens the view to 10 chunks. Close the game first</small></div><button class="btn" id="faster">Apply</button></div>
+<div class="row"><div>Riptide<small>Lifts the frame pacing mcpelauncher adds on a Mac and the game's developer file watcher. About 2.4 times the frame rate. Pair it with FPS Limit to keep the laptop cool</small></div><button class="btn" id="riptide"></button></div>
+<div class="row"><div>Faster graphics<small>Turns off vsync, fancy skies, smooth lighting, fancy leaves and clouds, and shortens the view to 10 chunks. Close the game first</small></div><button class="btn" id="faster">Apply</button></div>
 <div class="row"><div>Google Play<small id="who"></small></div><button class="btn" id="sign"></button></div>
 <div class="row"><div>Game folder<small>Worlds, resource packs and screenshots</small></div><button class="btn" id="folder">Open</button></div>
 </div>
@@ -299,6 +300,7 @@ function draw() {
   $('chip').replaceChildren(el('b', {}, state.email ? state.email[0] : '?'), el('span', {}, state.email ?? 'Sign in'));
   $('chip').dataset.page = 'settings';
   $('who').textContent = state.email ?? 'Not signed in';
+  $('riptide').textContent = state.riptide ? 'On' : 'Off';
   $('sign').textContent = state.email ? 'Sign out' : 'Sign in';
   $('sign').disabled = busy;
 
@@ -407,6 +409,7 @@ listen('signed-in', async ({ payload }) => {
 });
 
 $('sign').onclick = () => (state.email ? run('Signed out', () => invoke('sign_out')) : signIn());
+$('riptide').onclick = () => run(state.riptide ? 'Riptide is off from the next start' : 'Riptide is on from the next start', () => invoke('set_riptide', { on: !state.riptide }));
 $('faster').onclick = () => invoke('faster_graphics').then(() => say('The game will start with faster graphics'), (err) => say(String(err)));
 $('folder').onclick = () => invoke('open_game_folder').catch((err) => say(String(err)));
 
