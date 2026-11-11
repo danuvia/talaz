@@ -4,149 +4,338 @@
 <meta charset="utf-8">
 <title>Talaz</title>
 <style>
-:root { --accent: #4FD8C4; --text: #E8EEF2; --muted: #9AA9B5; --ink: #10171D; --deep: #0C1217; --line: #1E2A33; }
+@font-face { font-family: Poppins; src: url(Poppins-Regular.ttf); }
+:root { --accent: #4FD8C4; --text: #E8EEF2; --muted: #9AA9B5; --ink: #10171D; --deep: #0C1217; --line: #1E2A33; --water: rgba(79, 216, 196, 0.22); --ease: cubic-bezier(0.2, 0.8, 0.2, 1); }
 * { box-sizing: border-box; }
-body { margin: 0; height: 100vh; display: flex; flex-direction: column; background: var(--deep); color: var(--text); font: 14px system-ui, sans-serif; user-select: none; overflow: hidden; }
-header { display: flex; align-items: center; gap: 12px; padding: 28px 32px; }
-header span { font-weight: 600; font-size: 22px; letter-spacing: -0.5px; }
-main { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; }
-h1 { margin: 0; font-size: 44px; font-weight: 600; letter-spacing: -1.5px; }
-p { margin: 0; color: var(--muted); min-height: 20px; }
-.row { display: flex; gap: 8px; }
-select, button { height: 48px; border-radius: 24px; font: inherit; }
-select { padding: 0 16px; border: 1px solid var(--line); background: var(--ink); color: var(--text); }
-button { padding: 0 36px; border: 0; background: var(--text); color: var(--deep); font-weight: 600; font-size: 15px; cursor: pointer; }
-button:disabled { opacity: 0.5; cursor: default; }
-:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.link { height: auto; padding: 0; border-radius: 0; background: none; color: var(--accent); font-weight: 400; font-size: inherit; }
-progress { width: 320px; height: 4px; accent-color: var(--accent); }
-progress[hidden] { display: block; visibility: hidden; }
-.sea { position: absolute; left: 0; right: 0; bottom: 0; height: 120px; z-index: -1; }
+body { margin: 0; height: 100vh; background: radial-gradient(900px 500px at 85% -10%, rgba(79, 216, 196, 0.10), transparent 70%), var(--deep); color: var(--text); font: 14px Poppins, system-ui, sans-serif; font-synthesis: none; user-select: none; cursor: default; overflow: hidden; }
+button, select { font: inherit; color: inherit; }
+button { cursor: pointer; border: 0; background: none; padding: 0; }
+button:disabled { opacity: 0.45; cursor: default; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+h1, h2, p { margin: 0; font-weight: 400; }
+.muted { color: var(--muted); }
+
+/* top bar: the window is dragged by it, the traffic lights sit in its left corner */
+header { position: relative; z-index: 2; height: 64px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 0 20px 0 92px; }
+.brand { display: flex; align-items: center; gap: 10px; font-size: 17px; letter-spacing: -0.3px; pointer-events: none; }
+nav { position: relative; display: flex; padding: 4px; border: 1px solid var(--line); border-radius: 999px; background: rgba(16, 23, 29, 0.7); backdrop-filter: blur(12px); }
+nav button { position: relative; z-index: 1; height: 32px; padding: 0 18px; border-radius: 999px; color: var(--muted); transition: color 0.25s; }
+nav button[aria-current] { color: var(--deep); }
+nav i { position: absolute; top: 4px; left: 0; height: 32px; border-radius: 999px; background: var(--accent); transition: transform 0.45s var(--ease), width 0.45s var(--ease); }
+#chip { justify-self: end; display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px 0 5px; border: 1px solid var(--line); border-radius: 999px; background: rgba(16, 23, 29, 0.7); max-width: 240px; transition: border-color 0.2s; }
+#chip:hover { border-color: var(--accent); }
+#chip b { flex: none; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--water); color: var(--accent); font-weight: 400; text-transform: uppercase; }
+#chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+
+/* pages slide over each other */
+.page { position: absolute; inset: 64px 0 0; padding: 28px 56px 0; opacity: 0; transform: translateY(14px); pointer-events: none; transition: opacity 0.3s, transform 0.5s var(--ease); z-index: 1; }
+.page.on { opacity: 1; transform: none; pointer-events: auto; }
+h2 { font-size: 30px; letter-spacing: -0.8px; }
+h2 + p { margin: 4px 0 26px; color: var(--muted); }
+
+/* home */
+#home { display: flex; flex-direction: column; justify-content: center; padding-bottom: 150px; }
+.eyebrow { color: var(--accent); font-size: 12px; letter-spacing: 3px; text-transform: uppercase; }
+h1 { font-size: 84px; line-height: 1; letter-spacing: -4px; margin: 10px 0 30px -4px; }
+.go { display: flex; gap: 10px; align-items: center; }
+.pick { position: relative; }
+.pick select { appearance: none; height: 60px; min-width: 190px; padding: 18px 44px 0 22px; border: 1px solid var(--line); border-radius: 30px; background: rgba(16, 23, 29, 0.8); font-size: 16px; cursor: pointer; transition: border-color 0.2s; }
+.pick select:hover { border-color: var(--muted); }
+.pick label { position: absolute; left: 23px; top: 10px; font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); pointer-events: none; }
+.pick svg { position: absolute; right: 20px; top: 26px; pointer-events: none; }
+#play { position: relative; overflow: hidden; height: 60px; padding: 0 56px; border-radius: 30px; background: var(--accent); color: var(--deep); font-size: 18px; box-shadow: 0 12px 40px -8px rgba(79, 216, 196, 0.55); transition: transform 0.25s var(--ease), box-shadow 0.25s; }
+#play:not(:disabled):hover { transform: translateY(-2px); box-shadow: 0 18px 50px -8px rgba(79, 216, 196, 0.7); }
+#play:not(:disabled):active { transform: scale(0.97); }
+.facts { display: flex; gap: 28px; margin-top: 34px; }
+.facts button { text-align: left; padding-left: 14px; border-left: 1px solid var(--line); transition: border-color 0.2s; }
+.facts button:hover { border-color: var(--accent); }
+.facts span { display: block; font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); }
+.facts strong { font-weight: 400; font-size: 15px; }
+
+/* the sea under every page */
+.sea { position: absolute; left: 0; bottom: 0; width: 100%; height: 190px; overflow: hidden; pointer-events: none; }
+.sea svg { position: absolute; bottom: 0; left: 0; width: 200%; height: 100%; animation: drift 18s linear infinite; }
+.sea svg:nth-child(2) { height: 78%; animation-duration: 11s; animation-direction: reverse; }
+.sea svg:nth-child(3) { height: 56%; animation-duration: 7s; }
+@keyframes drift { to { transform: translateX(-50%); } }
+
+/* mods: a tile fills with water when its mod is on */
+.tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.tile { position: relative; overflow: hidden; height: 250px; padding: 22px; border: 1px solid var(--line); border-radius: 24px; background: var(--ink); text-align: left; display: flex; flex-direction: column; transition: border-color 0.3s, transform 0.3s var(--ease); }
+.tile:hover { transform: translateY(-3px); border-color: #2c3d49; }
+.tile[aria-checked=true] { border-color: rgba(79, 216, 196, 0.5); }
+.tile strong { position: relative; z-index: 1; font-weight: 400; font-size: 22px; letter-spacing: -0.5px; }
+.tile small { position: relative; z-index: 1; margin-top: 6px; color: var(--muted); font-size: 13px; line-height: 1.45; }
+.tile em { position: relative; z-index: 1; margin-top: auto; font-style: normal; font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); transition: color 0.3s; }
+.tile[aria-checked=true] em { color: var(--accent); }
+.tile .fill { position: absolute; left: 0; right: 0; bottom: 0; height: 46%; background: var(--water); transform: translateY(110%); transition: transform 0.9s var(--ease); }
+.tile[aria-checked=true] .fill { transform: none; }
+.tile .fill svg { position: absolute; bottom: 100%; left: 0; width: 200%; height: 14px; animation: drift 5s linear infinite; }
+
+/* lists */
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
+.cols h3, .rows h3 { margin: 0 0 10px; font-weight: 400; font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); }
+.list { max-height: 380px; overflow-y: auto; border: 1px solid var(--line); border-radius: 20px; background: rgba(16, 23, 29, 0.85); backdrop-filter: blur(12px); }
+.list::-webkit-scrollbar { width: 0; }
+.row { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 0 10px 0 20px; }
+.row + .row { border-top: 1px solid var(--line); }
+.row > :first-child { flex: 1; }
+.row small { display: block; color: var(--muted); font-size: 12px; }
+.tag { padding: 3px 10px; border-radius: 999px; background: var(--water); color: var(--accent); font-size: 11px; }
+.btn { height: 36px; padding: 0 16px; border: 1px solid var(--line); border-radius: 18px; transition: border-color 0.2s, background 0.2s, color 0.2s; }
+.btn:not(:disabled):hover { border-color: var(--accent); color: var(--accent); }
+.btn.sure { border-color: #E5707A; color: #E5707A; }
+.row select { appearance: none; height: 36px; padding: 0 16px; border: 1px solid var(--line); border-radius: 18px; background: var(--ink); cursor: pointer; }
+.rows { max-width: 640px; }
+.fine { margin-top: 18px; font-size: 12px; color: var(--muted); }
+
+/* what a long step is doing, on top of any page */
+#toast { position: absolute; z-index: 3; left: 50%; bottom: 26px; width: 420px; padding: 13px 20px 15px; border: 1px solid var(--line); border-radius: 18px; background: rgba(16, 23, 29, 0.92); backdrop-filter: blur(16px); box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5); transform: translate(-50%, 90px); opacity: 0; transition: transform 0.5s var(--ease), opacity 0.3s; }
+#toast.on { transform: translate(-50%, 0); opacity: 1; }
+#toast p { font-size: 13px; }
+#toast div { height: 3px; margin-top: 9px; border-radius: 2px; background: var(--line); overflow: hidden; }
+#toast div[hidden] { display: none; }
+#toast i { display: block; height: 100%; width: 0; border-radius: 2px; background: var(--accent); transition: width 0.3s; }
+#toast i.loose { width: 35%; animation: slide 1.2s ease-in-out infinite alternate; }
+@keyframes slide { from { transform: translateX(-100%); } to { transform: translateX(290%); } }
+@media (prefers-reduced-motion: reduce) { *, *::before { animation: none !important; transition: none !important; } }
 </style>
 </head>
 <body>
-<header>
-<svg aria-hidden="true" width="26" height="26" viewBox="0 0 26 26" fill="none" stroke="#4FD8C4" stroke-width="2.4" stroke-linecap="round"><path d="M2 10c4-5 7-5 11 0s7 5 11 0"/><path d="M2 18c4-5 7-5 11 0s7 5 11 0"/></svg>
-<span>talaz</span>
+<header data-tauri-drag-region>
+<div class="brand">
+<svg aria-hidden="true" width="22" height="22" viewBox="0 0 26 26" fill="none" stroke="#4FD8C4" stroke-width="2.4" stroke-linecap="round"><path d="M2 10c4-5 7-5 11 0s7 5 11 0"/><path d="M2 18c4-5 7-5 11 0s7 5 11 0"/></svg>
+talaz
+</div>
+<nav aria-label="Pages">
+<i></i>
+<button data-page="home" aria-current="page">Home</button>
+<button data-page="mods">Mods</button>
+<button data-page="versions">Versions</button>
+<button data-page="settings">Settings</button>
+</nav>
+<button id="chip"></button>
 </header>
-<main>
-<h1>Minecraft Bedrock</h1>
-<div class="row">
-<select id="version" aria-label="Game version"></select>
+
+<section class="page on" id="home">
+<p class="eyebrow">Bedrock Edition</p>
+<h1>Minecraft</h1>
+<div class="go">
+<div class="pick">
+<label for="version">Version</label>
+<select id="version"></select>
+<svg aria-hidden="true" width="12" height="8" viewBox="0 0 12 8" fill="none" stroke="#9AA9B5" stroke-width="1.8" stroke-linecap="round"><path d="M1 1.5l5 5 5-5"/></svg>
+</div>
 <button id="play">Play</button>
 </div>
-<progress id="bar" hidden></progress>
-<p id="status" role="status"></p>
-<p id="account"></p>
-</main>
-<svg class="sea" aria-hidden="true" viewBox="0 0 960 120" preserveAspectRatio="none"><path d="M0 120V40c80-32 160-32 240 0s160 32 240 0 160-32 240 0 160 32 240 0v80z" fill="#4FD8C4" fill-opacity="0.22"/></svg>
+<div class="facts">
+<button data-page="mods"><span>Mods</span><strong id="fact-mods"></strong></button>
+<button data-page="settings"><span>Window</span><strong id="fact-size"></strong></button>
+<button data-page="versions"><span>Installed</span><strong id="fact-versions"></strong></button>
+</div>
+</section>
+
+<section class="page" id="mods">
+<h2>Mods</h2>
+<p>Pick what the game starts with. Everything else is in the game, behind Right Shift.</p>
+<div class="tiles" id="tiles"></div>
+</section>
+
+<section class="page" id="versions">
+<h2>Versions</h2>
+<p>Downloaded from Google Play with the account that owns the game.</p>
+<div class="cols">
+<div><h3>Installed</h3><div class="list" id="installed"></div></div>
+<div><h3>Download</h3><div class="list" id="downloads"></div></div>
+</div>
+</section>
+
+<section class="page" id="settings">
+<h2>Settings</h2>
+<p>The launcher's own. Game settings stay in the game.</p>
+<div class="rows">
+<div class="list">
+<div class="row"><div>Game window<small>The size the game opens at</small></div><select id="size" aria-label="Game window size"></select></div>
+<div class="row"><div>Google Play<small id="who"></small></div><button class="btn" id="sign"></button></div>
+<div class="row"><div>Game folder<small>Worlds, resource packs and screenshots</small></div><button class="btn" id="folder">Open</button></div>
+</div>
+<p class="fine">Talaz 0.1.0 by Danuvia. Not affiliated with Mojang or Microsoft.</p>
+</div>
+</section>
+
+<div class="sea" aria-hidden="true">
+<svg viewBox="0 0 1920 120" preserveAspectRatio="none"><path d="M0 120V40c80-32 160-32 240 0s160 32 240 0 160-32 240 0 160 32 240 0 160-32 240 0 160 32 240 0 160-32 240 0 160 32 240 0v80z" fill="#4FD8C4" fill-opacity="0.07"/></svg>
+<svg viewBox="0 0 1920 120" preserveAspectRatio="none"><path d="M0 120V40c80-32 160-32 240 0s160 32 240 0 160-32 240 0 160 32 240 0 160-32 240 0 160 32 240 0 160-32 240 0 160 32 240 0v80z" fill="#4FD8C4" fill-opacity="0.10"/></svg>
+<svg viewBox="0 0 1920 120" preserveAspectRatio="none"><path d="M0 120V40c80-32 160-32 240 0s160 32 240 0 160-32 240 0 160 32 240 0 160-32 240 0 160 32 240 0 160-32 240 0 160 32 240 0v80z" fill="#4FD8C4" fill-opacity="0.16"/></svg>
+</div>
+
+<div id="toast" role="status"><p></p><div><i></i></div></div>
+
 <script>
 const { invoke } = window.__TAURI__.core, { listen } = window.__TAURI__.event;
-const [version, play, status, bar, account] = ['version', 'play', 'status', 'bar', 'account'].map((id) => document.getElementById(id));
-let email = null, busy = false;
+const $ = (id) => document.getElementById(id);
+const el = (tag, props, ...children) => { const node = Object.assign(document.createElement(tag), props); node.append(...children); return node; };
+const SIZES = ['1280x720', '1600x900', '1920x1080', '2560x1440'];
+let state = { versions: [], email: null, mods: [] }, available = null, busy = false, waiting = null;
 
-// installed versions are picked by name, the others carry the store's code to download with
-const chosen = () => version.selectedOptions[0];
-const label = () => (play.textContent = chosen()?.dataset.code ? 'Download' : 'Play');
-version.onchange = label;
-
-function showAccount() {
-  account.replaceChildren(email ? `Google Play: ${email} ` : '');
-  if (!email) return;
-  const out = Object.assign(document.createElement('button'), { className: 'link', textContent: 'Sign out' });
-  out.onclick = async () => { await invoke('sign_out'); email = null; showAccount(); };
-  account.append(out);
-}
-
-async function refresh(pick) {
-  const state = await invoke('state');
-  email = state.email;
-  showAccount();
-  version.replaceChildren();
-  const group = (name) => version.appendChild(Object.assign(document.createElement('optgroup'), { label: name }));
-  if (state.versions.length) {
-    const installed = group('Installed');
-    for (const name of state.versions) installed.append(new Option(name, name));
+// pages
+const thumb = document.querySelector('nav i');
+function show(page) {
+  for (const tab of document.querySelectorAll('nav button')) {
+    const on = tab.dataset.page === page;
+    tab.toggleAttribute('aria-current', on);
+    if (on) { thumb.style.width = `${tab.offsetWidth}px`; thumb.style.transform = `translateX(${tab.offsetLeft}px)`; }
   }
-  const want = pick ?? localStorage.getItem('version');
-  if (state.versions.includes(want)) version.value = want;
-  label();
-  try {
-    const { recommended, list } = await invoke('available');
-    const download = group('Download');
-    // the newest few, and always the one known to run well
-    for (const [code, name] of list.filter(([, name], i) => i < 12 || name === recommended)) {
-      if (state.versions.includes(name)) continue;
-      const option = new Option(name === recommended ? `${name} (recommended)` : name, name);
-      option.dataset.code = code;
-      download.append(option);
-    }
-    if (!state.versions.length) version.value = recommended;
-  } catch (err) {
-    if (!state.versions.length) status.textContent = String(err);
-  }
-  label();
-  play.disabled = busy || !chosen();
+  for (const section of document.querySelectorAll('.page')) section.classList.toggle('on', section.id === page);
 }
+document.addEventListener('click', (event) => { const page = event.target.closest('[data-page]')?.dataset.page; if (page) show(page); });
+
+// the message at the bottom: stays while something runs, leaves by itself otherwise
+let leaving;
+function say(text, part) {
+  const toast = $('toast'), bar = toast.querySelector('i');
+  toast.firstChild.textContent = text;
+  bar.parentNode.hidden = part === undefined;
+  bar.classList.toggle('loose', part === null);
+  bar.style.width = part == null ? '' : `${part * 100}%`;
+  toast.classList.add('on');
+  clearTimeout(leaving);
+  if (part === undefined) leaving = setTimeout(() => toast.classList.remove('on'), 5000);
+}
+listen('progress', ({ payload: [text, part] }) => say(part == null ? text : `${text} · ${Math.round(part * 100)}%`, part));
 
 function working(on) {
   busy = on;
-  play.disabled = version.disabled = on;
-  if (!on) bar.hidden = true;
+  draw();
 }
 
-listen('progress', ({ payload: [text, part] }) => {
-  status.textContent = part == null ? `${text}...` : `${text} ${Math.round(part * 100)}%`;
-  bar.hidden = false;
-  if (part == null) bar.removeAttribute('value'); else bar.value = part;
-});
-
-async function install(option) {
+async function run(text, job) {
   working(true);
-  try {
-    await invoke('install', { code: Number(option.dataset.code), name: option.value });
-    status.textContent = `Minecraft ${option.value} is ready`;
-    await refresh(option.value);
-  } catch (err) {
-    status.textContent = String(err);
-  }
+  try { await job(); if (text) say(text); } catch (err) { say(String(err)); }
+  await refresh();
   working(false);
 }
 
-let waiting = null;
-listen('signed-in', ({ payload }) => {
-  const option = waiting;
+function draw() {
+  // header chip and the account row
+  $('chip').replaceChildren(el('b', {}, state.email ? state.email[0] : '?'), el('span', {}, state.email ?? 'Sign in'));
+  $('chip').dataset.page = 'settings';
+  $('who').textContent = state.email ?? 'Not signed in';
+  $('sign').textContent = state.email ? 'Sign out' : 'Sign in';
+  $('sign').disabled = busy;
+
+  // home
+  const names = state.versions.map(([name]) => name), version = $('version');
+  const want = version.value || localStorage.getItem('version');
+  version.replaceChildren(...names.map((name) => new Option(name, name)));
+  if (names.includes(want)) version.value = want;
+  version.disabled = busy || !names.length;
+  $('play').textContent = names.length ? 'Play' : 'Get the game';
+  $('play').disabled = busy;
+  const on = state.mods.filter((mod) => mod.on).length;
+  $('fact-mods').textContent = on ? `${on} on` : 'All off';
+  $('fact-size').textContent = $('size').value.replace('x', ' × ');
+  $('fact-versions').textContent = names.length ? `${names.length} version${names.length > 1 ? 's' : ''}` : 'Nothing yet';
+
+  // mods: made once, then only switched, so the water moves instead of jumping
+  if (!$('tiles').children.length) {
+    for (const { id, name, note } of state.mods) {
+      const tile = el('button', { className: 'tile', role: 'switch', id: `mod-${id}` }, el('strong', {}, name), el('small', {}, note), el('em'), el('div', { className: 'fill', innerHTML: '<svg viewBox="0 0 480 14" preserveAspectRatio="none"><path d="M0 14V7c40-9 80-9 120 0s80 9 120 0 80-9 120 0 80 9 120 0v7z" fill="rgba(79,216,196,0.22)"/></svg>' }));
+      tile.onclick = async () => {
+        const mod = state.mods.find((mod) => mod.id === id);
+        mod.on = !mod.on;
+        draw();
+        try { await invoke('set_mod', { id, on: mod.on }); } catch (err) { say(String(err)); refresh(); }
+      };
+      $('tiles').append(tile);
+    }
+  }
+  for (const mod of state.mods) {
+    const tile = $(`mod-${mod.id}`);
+    if (!tile) continue;
+    tile.setAttribute('aria-checked', mod.on);
+    tile.querySelector('em').textContent = mod.on ? 'On' : 'Off';
+  }
+
+  // versions
+  $('installed').replaceChildren(...state.versions.map(([name, own]) => {
+    const remove = el('button', { className: 'btn', textContent: 'Delete', disabled: busy });
+    // the first press asks, the second deletes
+    remove.onclick = () => {
+      if (!remove.classList.contains('sure')) { remove.classList.add('sure'); remove.textContent = 'Delete it?'; return; }
+      run(`Minecraft ${name} was deleted`, () => invoke('remove', { version: name }));
+    };
+    return el('div', { className: 'row' }, el('div', {}, name, el('small', {}, own ? 'Downloaded by Talaz' : 'From Minecraft Bedrock Launcher')), ...(own ? [remove] : []));
+  }));
+  if (!names.length) $('installed').replaceChildren(el('div', { className: 'row muted' }, 'Nothing here yet'));
+  if (available) {
+    // the newest few, and always the one known to run well
+    const list = available.list.filter(([, name], i) => (i < 12 || name === available.recommended) && !names.includes(name));
+    $('downloads').replaceChildren(...list.map(([code, name]) => {
+      const get = el('button', { className: 'btn', textContent: 'Download', disabled: busy });
+      get.onclick = () => download(code, name);
+      return el('div', { className: 'row' }, el('div', {}, name), ...(name === available.recommended ? [el('span', { className: 'tag' }, 'Recommended')] : []), get);
+    }));
+  }
+}
+
+async function refresh() {
+  state = await invoke('state');
+  draw();
+}
+
+function install(code, name) {
+  return run(`Minecraft ${name} is ready`, async () => {
+    await invoke('install', { code, name });
+    localStorage.setItem('version', name);
+    $('version').value = '';
+  });
+}
+
+function signIn() {
+  working(true);
+  say('Sign in with the Google account that owns Minecraft', null);
+  invoke('sign_in').catch((err) => { say(String(err)); waiting = null; working(false); });
+}
+
+function download(code, name) {
+  if (state.email) return install(code, name);
+  // Google's page opens in its own window, the download goes on once it is done
+  waiting = [code, name];
+  signIn();
+}
+
+listen('signed-in', async ({ payload }) => {
+  const next = waiting;
   waiting = null;
+  await refresh();
   working(false);
-  if (payload.Err) return (status.textContent = payload.Err);
-  email = payload.Ok;
-  showAccount();
-  status.textContent = '';
-  if (option) install(option);
+  if (payload.Err) return say(payload.Err);
+  say(`Signed in as ${payload.Ok}`);
+  if (next) install(...next);
 });
 
-play.onclick = async () => {
-  const option = chosen();
-  if (option.dataset.code) {
-    if (email) return install(option);
-    // Google's page opens in its own window, the download goes on once it is done
-    waiting = option;
-    working(true);
-    status.textContent = 'Sign in with the Google account that owns Minecraft';
-    return invoke('sign_in').catch((err) => { status.textContent = String(err); working(false); });
-  }
-  localStorage.setItem('version', option.value);
+$('sign').onclick = () => (state.email ? run('Signed out', () => invoke('sign_out')) : signIn());
+$('folder').onclick = () => invoke('open_game_folder').catch((err) => say(String(err)));
+
+$('size').append(...SIZES.map((size) => new Option(size.replace('x', ' × '), size)));
+$('size').value = SIZES.includes(localStorage.getItem('size')) ? localStorage.getItem('size') : SIZES[0];
+$('size').onchange = () => { localStorage.setItem('size', $('size').value); draw(); };
+$('version').onchange = () => localStorage.setItem('version', $('version').value);
+
+$('play').onclick = async () => {
+  const version = $('version').value;
+  if (!version) return show('versions');
+  const [width, height] = $('size').value.split('x').map(Number);
   working(true);
-  try {
-    await invoke('play', { version: option.value });
-    status.textContent = 'Starting the game...';
-  } catch (err) {
-    status.textContent = String(err);
-  }
+  say('Starting Minecraft', null);
+  try { await invoke('play', { version, width, height }); say('Minecraft is starting'); } catch (err) { say(String(err)); }
   setTimeout(() => working(false), 3000);
 };
 
+document.fonts.ready.then(() => show('home'));
 refresh();
+invoke('available').then((list) => { available = list; draw(); }).catch((err) => $('downloads').replaceChildren(el('div', { className: 'row muted' }, String(err))));
 </script>
 </body>
 </html>

@@ -48,19 +48,89 @@ fn installed() -> Vec<(String, PathBuf)> {
     found
 }
 
+// ponytail: the mod names live here and in mod/src/mods.cpp. Have the mod write its own list once there are many
+const MODS: &[(&str, &str, &str)] = &[
+    ("zoom", "Zoom", "Hold C to zoom in, scroll to zoom further"),
+    ("fps", "FPS", "Frames per second on screen"),
+    ("cps", "CPS", "Clicks per second"),
+    ("keystrokes", "Keystrokes", "Shows the keys you press"),
+];
+
+/// The file the mod keeps the active profile's settings in, next to its library
+fn profile_file() -> Option<PathBuf> {
+    let base = mods_dir()?.join("libtalaz_bedrock");
+    let global = std::fs::read_to_string(base.with_extension("ini")).unwrap_or_default();
+    let profile = global.lines().find_map(|line| line.strip_prefix("profile=")).unwrap_or("Default Profile");
+    Some(base.with_extension(format!("profile.{profile}.ini")))
+}
+
+fn ini_get(text: &str, key: &str) -> Option<f32> {
+    text.lines().filter_map(|line| line.split_once('=')).filter(|(name, _)| *name == key).last()?.1.trim().parse().ok()
+}
+
+fn ini_set(text: &str, key: &str, value: f32) -> String {
+    let mut out: String = text.lines().filter(|line| line.split_once('=').map_or(true, |(name, _)| name != key)).map(|line| format!("{line}\n")).collect();
+    out.push_str(&format!("{key}={value}\n"));
+    out
+}
+
+#[derive(serde::Serialize)]
+struct Mod {
+    id: &'static str,
+    name: &'static str,
+    note: &'static str,
+    on: bool,
+}
+
 #[derive(serde::Serialize)]
 struct State {
-    versions: Vec<String>,
+    /// (name, whether Talaz downloaded it and may delete it)
+    versions: Vec<(String, bool)>,
     email: Option<String>,
+    mods: Vec<Mod>,
 }
 
 #[tauri::command]
 fn state() -> State {
-    State { versions: installed().into_iter().map(|(name, _)| name).collect(), email: play::email() }
+    let own = root().map(|root| root.join("versions"));
+    let settings = profile_file().and_then(|file| std::fs::read_to_string(file).ok()).unwrap_or_default();
+    State {
+        versions: installed().into_iter().map(|(name, path)| (name, own.as_deref().is_some_and(|own| path.starts_with(own)))).collect(),
+        email: play::email(),
+        mods: MODS.iter().map(|&(id, name, note)| Mod { id, name, note, on: ini_get(&settings, &format!("{id}.enabled")).is_some_and(|v| v != 0.0) }).collect(),
+    }
+}
+
+/// Turns a mod on or off for the next start of the game
+// ponytail: a running game writes its own settings back over this. Tell the mod instead once the two can talk
+#[tauri::command]
+fn set_mod(id: String, on: bool) -> Result<(), String> {
+    if !MODS.iter().any(|(known, ..)| *known == id) {
+        return Err("No such mod".into());
+    }
+    let file = profile_file().ok_or("The mod is not built")?;
+    let text = std::fs::read_to_string(&file).unwrap_or_default();
+    std::fs::write(file, ini_set(&text, &format!("{id}.enabled"), on as u8 as f32)).map_err(|err| err.to_string())
+}
+
+/// Deletes a version Talaz downloaded. Versions from Minecraft Bedrock Launcher are left alone
+#[tauri::command]
+fn remove(version: String) -> Result<(), String> {
+    let own = root().ok_or("No home folder")?.join("versions");
+    let (_, path) = installed().into_iter().find(|(name, path)| *name == version && path.starts_with(&own)).ok_or("Talaz did not download that version")?;
+    std::fs::remove_dir_all(path).map_err(|err| err.to_string())
+}
+
+/// Shows the folder with the worlds and resource packs
+#[tauri::command]
+fn open_game_folder() -> Result<(), String> {
+    let dir = root().ok_or("No home folder")?.join("game");
+    std::fs::create_dir_all(&dir).map_err(|err| err.to_string())?;
+    Command::new(if cfg!(target_os = "macos") { "open" } else { "xdg-open" }).arg(dir).spawn().map(drop).map_err(|err| err.to_string())
 }
 
 #[tauri::command(async)]
-fn play(app: tauri::AppHandle, version: String) -> Result<(), String> {
+fn play(app: tauri::AppHandle, version: String, width: u32, height: u32) -> Result<(), String> {
     // the name comes from the page, so only take one that is installed
     let (_, game) = installed().into_iter().find(|(name, _)| *name == version).ok_or("That version is not installed")?;
     runtime::ensure(&app)?;
@@ -76,7 +146,7 @@ fn play(app: tauri::AppHandle, version: String) -> Result<(), String> {
             std::fs::create_dir_all(&data).map_err(|err| err.to_string())?;
             std::fs::write(&settings, "enable_menubar=false\n").map_err(|err| err.to_string())?;
         }
-        cmd.arg("-dd").arg(data).args(["-ww", "1280", "-wh", "720"]);
+        cmd.arg("-dd").arg(data).arg("-ww").arg(width.clamp(640, 7680).to_string()).arg("-wh").arg(height.clamp(360, 4320).to_string());
     }
     if let Some(mods) = mods_dir() {
         cmd.arg("-m").arg(mods);
@@ -86,13 +156,20 @@ fn play(app: tauri::AppHandle, version: String) -> Result<(), String> {
 
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![state, play, play::available, play::sign_in, play::sign_out, play::install])
+        .invoke_handler(tauri::generate_handler![state, play, set_mod, remove, open_game_folder, play::available, play::sign_in, play::sign_out, play::install])
         .run(tauri::generate_context!())
         .expect("failed to start Talaz");
 }
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_setting_is_replaced_not_repeated() {
+        let text = super::ini_set("zoom.enabled=0\nzoom.factor=4\n", "zoom.enabled", 1.0);
+        assert_eq!(text, "zoom.factor=4\nzoom.enabled=1\n");
+        assert_eq!(super::ini_get(&text, "zoom.enabled"), Some(1.0));
+    }
+
     #[test]
     fn versions_compare_by_number() {
         assert!(super::version_key("1.26.60.4") > super::version_key("1.21.114.1"));
