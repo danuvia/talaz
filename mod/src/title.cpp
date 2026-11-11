@@ -166,7 +166,8 @@ bool showing() {
     // the mark is the pack's 2px square in the top-left corner: 1, 254, 3 on Talaz's
     // screen, 3, 1, 254 on the game's own
     glReadPixels(vp[0] + 1, vp[1] + vp[3] - 2, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, px);
-    glReadPixels(vp[0] + 14, vp[1] + vp[3] - 2, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, beside);
+    int away = int(std::ceil(14.f * vp[3] / 720)) + 2;
+    glReadPixels(vp[0] + away, vp[1] + vp[3] - 2, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, beside);
     vanilla = px[0] < 12 && px[1] < 12 && px[2] > 240;
     if (vanilla)
         return true;
@@ -175,7 +176,7 @@ bool showing() {
     // the second mark sits mid-screen, where a dialog like the quit prompt covers it
     int mx = vp[0] + vp[2] / 2 + 1, my = vp[1] + int(vp[3] * 0.44f) - 2;
     glReadPixels(mx, my, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, px);
-    glReadPixels(mx + 14, my, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, beside_middle);
+    glReadPixels(mx + away, my, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, beside_middle);
     return px[0] < 12 && px[1] > 240 && px[2] < 14;
 }
 
@@ -187,7 +188,9 @@ bool owns(ImVec2 point, ImVec2 display) {
 
 bool draw(ImDrawList* dl, ImVec2 d, ImVec2 mouse, bool clicked, float time) {
     float u = d.y / 720;
-    dl->AddRectFilled(ImVec2(0, 0), ImVec2(12, 12), IM_COL32(beside[0], beside[1], beside[2], 255));
+    // the marks grow with the game's interface scale, so the paint over them grows with the screen
+    float cover = std::ceil(14 * u);
+    dl->AddRectFilled(ImVec2(0, 0), ImVec2(cover, cover), IM_COL32(beside[0], beside[1], beside[2], 255));
     if (vanilla) {
         // the way back to Talaz, at the right end of the row
         static const Button back{nullptr, "waves", 0.945f, 0.03f, 0.035f, 0.06f, ICON};
@@ -195,7 +198,7 @@ bool draw(ImDrawList* dl, ImVec2 d, ImVec2 mouse, bool clicked, float time) {
         return false;
     }
     float mx = std::round(d.x / 2), my = std::round(d.y * 0.56f);
-    dl->AddRectFilled(ImVec2(mx - 2, my - 2), ImVec2(mx + 12, my + 12), IM_COL32(beside_middle[0], beside_middle[1], beside_middle[2], 255));
+    dl->AddRectFilled(ImVec2(mx - cover / 2, my - cover / 2), ImVec2(mx + cover, my + cover), IM_COL32(beside_middle[0], beside_middle[1], beside_middle[2], 255));
 
     // the panorama stays, darkened on the left where the words are
     dl->AddRectFilledMultiColor(ImVec2(0, 0), ImVec2(d.x * 0.55f, d.y), IM_COL32(12, 18, 23, 225), IM_COL32(12, 18, 23, 0),
