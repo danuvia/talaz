@@ -86,6 +86,8 @@ const MODS: &[(&str, &str, &str)] = &[
     ("session", "Session", "How long you have been playing"),
     ("fpslimit", "FPS Limit", "Caps the frame rate to keep the computer cool and quiet"),
     ("togglesprint", "Toggle Sprint", "Press Ctrl once to keep sprinting"),
+    ("nightvision", "Night Vision", "Brightens the picture so caves and nights are easy to see"),
+    ("motionblur", "Motion Blur", "Blends each frame into the next for a smooth trail"),
 ];
 
 /// The one setting a mod has in the launcher: mod, key, unit, default and the values to pick from.
@@ -93,6 +95,8 @@ const MODS: &[(&str, &str, &str)] = &[
 const OPTIONS: &[(&str, &str, &str, f32, &[f32])] = &[
     ("zoom", "zoom.factor", "×", 4.0, &[2.0, 3.0, 4.0, 6.0, 8.0]),
     ("fpslimit", "fpslimit.cap", " fps", 60.0, &[30.0, 60.0, 90.0, 120.0, 144.0, 240.0]),
+    ("nightvision", "nightvision.strength", "×", 4.0, &[2.0, 4.0, 8.0]),
+    ("motionblur", "motionblur.amount", "%", 50.0, &[30.0, 50.0, 70.0, 85.0]),
 ];
 
 /// The file the mod keeps the active profile's settings in, next to its library
@@ -228,6 +232,38 @@ fn remove(version: String) -> Result<(), String> {
     std::fs::remove_dir_all(path).map_err(|err| err.to_string())
 }
 
+/// The game's own graphics settings that cost the most frames
+const FASTER: &[(&str, &str)] = &[
+    ("gfx_vsync", "0"),
+    ("gfx_fancyskies", "0"),
+    ("gfx_smoothlighting", "0"),
+    ("gfx_transparentleaves", "0"),
+    ("gfx_viewdistance", "160"),
+];
+
+/// The game's options.txt with some values changed; a setting the game has not written yet is left alone
+fn options_set(text: &str, values: &[(&str, &str)]) -> String {
+    text.lines()
+        .map(|line| match line.split_once(':').and_then(|(key, _)| values.iter().find(|(known, _)| *known == key)) {
+            Some((key, value)) => format!("{key}:{value}\n"),
+            None => format!("{line}\n"),
+        })
+        .collect()
+}
+
+/// Turns the game's costly graphics settings down. The settings from before stay beside the file
+// ponytail: a running game writes its own settings back on exit, so this only holds with the game closed
+#[tauri::command]
+fn faster_graphics() -> Result<(), String> {
+    let file = root().ok_or("No home folder")?.join("game/games/com.mojang/minecraftpe/options.txt");
+    let text = std::fs::read_to_string(&file).map_err(|_| "Start the game once first, so it writes its settings")?;
+    let backup = file.with_extension("txt.before-talaz");
+    if !backup.exists() {
+        std::fs::write(backup, &text).map_err(|err| err.to_string())?;
+    }
+    std::fs::write(file, options_set(&text, FASTER)).map_err(|err| err.to_string())
+}
+
 /// Shows the folder with the worlds and resource packs
 #[tauri::command]
 fn open_game_folder() -> Result<(), String> {
@@ -261,7 +297,7 @@ fn play(app: tauri::AppHandle, version: String, width: u32, height: u32) -> Resu
 
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![state, play, set_mod, set_option, remove, notes, warning, open_game_folder, play::available, play::sign_in, play::sign_out, play::install])
+        .invoke_handler(tauri::generate_handler![state, play, set_mod, set_option, remove, notes, warning, faster_graphics, open_game_folder, play::available, play::sign_in, play::sign_out, play::install])
         .run(tauri::generate_context!())
         .expect("failed to start Talaz");
 }
@@ -286,6 +322,12 @@ mod tests {
     fn a_setting_outside_its_choices_is_refused() {
         assert!(super::set_option("fpslimit.cap".into(), 0.0).is_err());
         assert!(super::set_option("key.menu".into(), 60.0).is_err());
+    }
+
+    #[test]
+    fn game_options_change_only_where_asked() {
+        let text = super::options_set("gfx_vsync:1\ngfx_gamma:0.5\n", &[("gfx_vsync", "0"), ("gfx_new", "1")]);
+        assert_eq!(text, "gfx_vsync:0\ngfx_gamma:0.5\n");
     }
 
     #[test]

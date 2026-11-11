@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "config.h"
+#include "gl.h"
 #include "theme.h"
 
 namespace mods {
@@ -38,6 +39,8 @@ Mod list[] = {
         {"session", "Session", "How long you have been playing"},
         {"fpslimit", "FPS Limit", "Caps the frame rate to keep the computer cool and quiet"},
         {"togglesprint", "Toggle Sprint", "Press Ctrl once to keep sprinting"},
+        {"nightvision", "Night Vision", "Brightens the picture so caves and nights are easy to see"},
+        {"motionblur", "Motion Blur", "Blends each frame into the next for a smooth trail"},
 };
 
 // The mods that draw on screen, stacked down the top-left at first
@@ -178,6 +181,8 @@ void declare() {
         config::declare(std::string(hud) + ".y", 0.015f + 0.055f * i++);
     }
     config::declare("fpslimit.cap", 60);
+    config::declare("nightvision.strength", 4);
+    config::declare("motionblur.amount", 50);
     config::declare("key.zoom", 'C');
     config::declare("key.sprint", 17);
     config::declare("zoom.factor", 4);
@@ -299,6 +304,49 @@ void tick(float dt) {
 
     float target = zoom_held ? 1 / config::get("zoom.factor") : 1;
     zoom_now += (target - zoom_now) * (1 - std::exp(-dt * 12));
+}
+
+bool effects_visible() {
+    return enabled("nightvision") || enabled("motionblur");
+}
+
+// The effects change the finished picture, so they also touch the game's own
+// HUD. All GL calls sit in draw callbacks, where ImGui has saved the game's state
+// ponytail: effects over the whole screen. Draw them before the game's HUD once the mod hooks the renderer
+void draw_effects(ImDrawList* dl) {
+    static GLuint last = 0;
+    static bool have_last = false;
+    ImVec2 size = ImGui::GetIO().DisplaySize;
+    if (enabled("nightvision")) {
+        // dst * src + dst: every white rectangle doubles the brightness and black stays black
+        dl->AddCallback([](const ImDrawList*, const ImDrawCmd*) { glBlendFuncSeparate(GL_DST_COLOR, GL_ONE, GL_ZERO, GL_ONE); }, nullptr);
+        for (float left = config::get("nightvision.strength"); left >= 2; left /= 2)
+            dl->AddRectFilled(ImVec2(0, 0), size, IM_COL32_WHITE);
+        dl->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
+    }
+    if (!enabled("motionblur")) {
+        have_last = false;
+        return;
+    }
+    if (have_last) {
+        int alpha = int(255 * std::clamp(config::get("motionblur.amount") / 100, 0.f, 0.9f));
+        // a copied frame is stored bottom up
+        dl->AddImage(ImTextureID(intptr_t(last)), ImVec2(0, 0), size, ImVec2(0, 1), ImVec2(1, 0), IM_COL32(255, 255, 255, alpha));
+    }
+    dl->AddCallback([](const ImDrawList*, const ImDrawCmd*) {
+        ImVec2 size = ImGui::GetIO().DisplaySize;
+        bool fresh = !last;
+        if (fresh)
+            glGenTextures(1, &last);
+        glBindTexture(GL_TEXTURE_2D, last);
+        if (fresh) {
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        }
+        glCopyTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 0, 0, GLsizei(size.x), GLsizei(size.y), 0);
+        have_last = true;
+    }, nullptr);
+    dl->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
 }
 
 bool hud_visible() {

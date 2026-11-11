@@ -199,7 +199,7 @@ void frame(EGLDisplay display, EGLSurface surface) {
     mods::tick(dt);
     mods::limit_fps();
     // the HUDs show over a world being played, not over the game's screens
-    if (!wanted && !(mods::hud_visible() && playing()))
+    if (!wanted && !((mods::hud_visible() || mods::effects_visible()) && playing()))
         return;
 
     EGLint w = 0, h = 0;
@@ -229,6 +229,8 @@ void frame(EGLDisplay display, EGLSurface surface) {
 
     ImGui_ImplOpenGL3_NewFrame();
     ImGui::NewFrame();
+    if (playing())
+        mods::draw_effects(ImGui::GetBackgroundDrawList());
     if (wanted)
         draw(size, dt);
     else

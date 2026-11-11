@@ -37,6 +37,9 @@ bool on_scroll(double dy, bool playing);
 // Called once per frame, before drawing
 void tick(float dt);
 bool hud_visible();
+// Night Vision and Motion Blur, drawn over the finished picture
+bool effects_visible();
+void draw_effects(ImDrawList* dl);
 // u is the size of one design pixel, the design being drawn for a 720p screen
 void draw_hud(ImDrawList* dl, float u, ImFont* font);
 

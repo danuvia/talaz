@@ -57,6 +57,7 @@
     X(PFNGLDELETETEXTURESPROC, glDeleteTextures) \
     X(PFNGLGETERRORPROC, glGetError) \
     X(PFNGLDISABLEVERTEXATTRIBARRAYPROC, glDisableVertexAttribArray) \
+    X(PFNGLCOPYTEXIMAGE2DPROC, glCopyTexImage2D) \
 
 #define TALAZ_GL_DECLARE(type, name) extern type tc_##name;
 TALAZ_GL_FUNCS(TALAZ_GL_DECLARE)
@@ -117,3 +118,4 @@ bool load();
 #define glDeleteTextures tc_glDeleteTextures
 #define glGetError tc_glGetError
 #define glDisableVertexAttribArray tc_glDisableVertexAttribArray
+#define glCopyTexImage2D tc_glCopyTexImage2D
