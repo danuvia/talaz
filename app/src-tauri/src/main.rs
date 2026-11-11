@@ -49,6 +49,17 @@ fn version_key(version: &str) -> Vec<u32> {
     version.split('.').filter_map(|part| part.parse().ok()).collect()
 }
 
+/// What is known to go wrong with a version, if anything
+// ponytail: mcpelauncher keeps no list of problems per version, so this is what we saw ourselves. Move to a file fetched from the repo once the list grows
+#[tauri::command]
+fn warning(version: String) -> Option<&'static str> {
+    let key = version_key(&version);
+    if cfg!(target_os = "macos") && key >= vec![1, 26] {
+        return Some("Minecraft 1.26 does not start on a Mac yet. Pick 1.21.114.1 instead.");
+    }
+    (key > version_key("1.21.114.1")).then_some("This version is not tested with Talaz. It may not start, and mods may not work.")
+}
+
 /// Installed game versions and where they are, newest first
 fn installed() -> Vec<(String, PathBuf)> {
     let mut found: Vec<(String, PathBuf)> = Vec::new();
@@ -220,7 +231,7 @@ fn play(app: tauri::AppHandle, version: String, width: u32, height: u32) -> Resu
 
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![state, play, set_mod, remove, notes, open_game_folder, play::available, play::sign_in, play::sign_out, play::install])
+        .invoke_handler(tauri::generate_handler![state, play, set_mod, remove, notes, warning, open_game_folder, play::available, play::sign_in, play::sign_out, play::install])
         .run(tauri::generate_context!())
         .expect("failed to start Talaz");
 }
@@ -262,5 +273,7 @@ mod tests {
     #[test]
     fn versions_compare_by_number() {
         assert!(super::version_key("1.26.60.4") > super::version_key("1.21.114.1"));
+        assert!(super::warning("1.21.114.1".into()).is_none() && super::warning("1.21.50.7".into()).is_none());
+        assert!(super::warning("1.21.130.3".into()).is_some() && super::warning("1.26.60.4".into()).is_some());
     }
 }
