@@ -1,6 +1,8 @@
 #pragma once
 
 #include <span>
+#include <string>
+#include <vector>
 
 #include "imgui.h"
 
@@ -17,6 +19,21 @@ struct Mod {
 std::span<Mod> all();
 bool enabled(const char* id);
 void toggle(const char* id);
+struct Setting {
+    const char* mod;
+    const char* name;
+    const char* key;
+    const char* unit = "";
+    float min = 0, max = 1, step = 0;
+    bool is_switch() const { return step == 0; }
+};
+std::vector<const Setting*> settings_of(const char* id);
+// How a value reads on the menu: "4×", "60 fps", "On"
+std::string setting_text(const Setting& s, float value);
+// Snaps a slider's value to its steps. Saving waits for the end of a drag
+void set_setting(const Setting& s, float value, bool save = true);
+// The mod's first setting for its tile ("4×"), empty when it has none or it is a switch
+std::string option_text(const char* id);
 
 // Declares every mod setting with config
 void declare();

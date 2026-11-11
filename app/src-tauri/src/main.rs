@@ -117,7 +117,6 @@ const MODS: &[(&str, &str, &str)] = &[
 const OPTIONS: &[(&str, &str, &str, f32, &[f32])] = &[
     ("zoom", "zoom.factor", "×", 4.0, &[2.0, 3.0, 4.0, 6.0, 8.0]),
     ("fpslimit", "fpslimit.cap", " fps", 60.0, &[30.0, 60.0, 90.0, 120.0, 144.0, 240.0]),
-    ("nightvision", "nightvision.strength", "×", 4.0, &[2.0, 4.0, 8.0]),
     ("motionblur", "motionblur.amount", "%", 50.0, &[30.0, 50.0, 70.0, 85.0]),
 ];
 

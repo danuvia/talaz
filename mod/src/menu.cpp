@@ -35,6 +35,10 @@ float width = 0, height = 0, scale = 0;
 float cursor_x = 0, cursor_y = 0;
 bool relative_mouse = false;
 std::chrono::steady_clock::time_point last_frame;
+// The slider being dragged on a settings page
+const mods::Setting* dragging = nullptr;
+// The mod whose settings page is open, none for the grid of tiles
+std::atomic<mods::Mod*> page{nullptr};
 bool (*mouse_locked)() = nullptr;
 const int* menubar_height = nullptr;
 
@@ -76,6 +80,92 @@ void wave(ImDrawList* dl, float x0, float x1, float y, float amp, float phase) {
         dl->PathLineTo(ImVec2(x0 + (x1 - x0) * i / 24, y - amp * std::sin(phase + i * PI / 6)));
 }
 
+bool inside(ImVec2 p, ImVec2 a, ImVec2 b) { return p.x >= a.x && p.x < b.x && p.y >= a.y && p.y < b.y; }
+
+// An on and off switch drawn at a, its knob sliding over with level 0 to 1
+void toggle_switch(ImDrawList* dl, ImVec2 a, float u, bool on) {
+    ImVec2 b(a.x + 44 * u, a.y + 24 * u);
+    dl->AddRectFilled(a, b, on ? ACCENT : LINE, 12 * u);
+    dl->AddCircleFilled(ImVec2(on ? b.x - 12 * u : a.x + 12 * u, a.y + 12 * u), 9 * u, on ? DEEP : MUTED);
+}
+
+// One mod's own page: a way back, its switch and every setting it has
+void draw_page(ImDrawList* dl, mods::Mod& m, float left, float top, float u) {
+    ImFont* font = ImGui::GetFont();
+    ImVec2 mouse = ImGui::GetIO().MousePos;
+    bool click = ImGui::IsMouseClicked(0);
+    float width = 960 * u;
+
+    // back to the tiles
+    ImVec2 back(left, top + 56 * u);
+    ImVec2 back_end(left + 90 * u, back.y + 24 * u);
+    bool over_back = inside(mouse, back, back_end);
+    dl->PathLineTo(ImVec2(back.x + 8 * u, back.y + 6 * u));
+    dl->PathLineTo(ImVec2(back.x + 2 * u, back.y + 12 * u));
+    dl->PathLineTo(ImVec2(back.x + 8 * u, back.y + 18 * u));
+    dl->PathStroke(over_back ? TEXT : MUTED, 0, 2 * u);
+    dl->AddText(font, 14 * u, ImVec2(back.x + 16 * u, back.y + 3 * u), over_back ? TEXT : MUTED, "Mods");
+    if (over_back && click)
+        page = nullptr;
+
+    dl->AddText(font, 30 * u, ImVec2(left, top + 92 * u), TEXT, m.name);
+    dl->AddText(font, 14 * u, ImVec2(left, top + 134 * u), MUTED, m.note);
+
+    // the rows sit in one panel, the mod's own switch first
+    auto settings = mods::settings_of(m.id);
+    float row = 58 * u, y = top + 174 * u;
+    ImVec2 pa(left, y), pb(left + width, y + row * (1 + settings.size()));
+    dl->AddRectFilled(pa, pb, INK, 16 * u);
+    dl->AddRect(pa, pb, LINE, 16 * u, 0, std::max(1.f, u));
+    auto label = [&](float ry, const char* text) {
+        dl->AddText(font, 15 * u, ImVec2(left + 20 * u, ry + (row - 15 * u) / 2 - 2 * u), TEXT, text);
+    };
+    auto switch_at = [&](float ry, bool on) {
+        ImVec2 a(left + width - 64 * u, ry + (row - 24 * u) / 2);
+        toggle_switch(dl, a, u, on);
+        return click && inside(mouse, ImVec2(left, ry), ImVec2(left + width, ry + row));
+    };
+
+    label(y, "Enabled");
+    if (switch_at(y, mods::enabled(m.id)))
+        mods::toggle(m.id);
+    for (const mods::Setting* s : settings) {
+        y += row;
+        dl->AddLine(ImVec2(left + 20 * u, y), ImVec2(left + width - 20 * u, y), LINE, std::max(1.f, u));
+        label(y, s->name);
+        float value = config::get(s->key);
+        if (s->is_switch()) {
+            if (switch_at(y, value != 0))
+                mods::set_setting(*s, value != 0 ? 0 : 1);
+            continue;
+        }
+        // a slider: drag along it, the value reads to its left
+        float tw = 260 * u, tx = left + width - 28 * u - tw, ty = y + row / 2;
+        float part = std::clamp((value - s->min) / (s->max - s->min), 0.f, 1.f);
+        ImVec2 ta(tx - 10 * u, ty - 14 * u), tb(tx + tw + 10 * u, ty + 14 * u);
+        bool over = inside(mouse, ta, tb);
+        if (over && click)
+            dragging = s;
+        if (dragging == s) {
+            float at = std::clamp((mouse.x - tx) / tw, 0.f, 1.f);
+            bool held = ImGui::IsMouseDown(0);
+            mods::set_setting(*s, s->min + at * (s->max - s->min), !held);
+            if (!held)
+                dragging = nullptr;
+            value = config::get(s->key);
+            part = std::clamp((value - s->min) / (s->max - s->min), 0.f, 1.f);
+        }
+        dl->AddRectFilled(ImVec2(tx, ty - 2 * u), ImVec2(tx + tw, ty + 2 * u), LINE, 2 * u);
+        dl->AddRectFilled(ImVec2(tx, ty - 2 * u), ImVec2(tx + tw * part, ty + 2 * u), ACCENT, 2 * u);
+        dl->AddCircleFilled(ImVec2(tx + tw * part, ty), (over || dragging == s ? 9 : 8) * u, ACCENT);
+        std::string text = mods::setting_text(*s, value);
+        ImVec2 ts = font->CalcTextSizeA(14 * u, FLT_MAX, 0, text.c_str());
+        dl->AddText(font, 14 * u, ImVec2(tx - 20 * u - ts.x, ty - ts.y / 2), ACCENT, text.c_str());
+    }
+    if (settings.empty())
+        dl->AddText(font, 13 * u, ImVec2(left, pb.y + 14 * u), MUTED, "This mod has nothing to set besides on and off.");
+}
+
 void draw(ImVec2 size, float dt) {
     ImDrawList* dl = ImGui::GetForegroundDrawList();
     ImFont* font = ImGui::GetFont();
@@ -91,6 +181,11 @@ void draw(ImVec2 size, float dt) {
     dl->PathStroke(ACCENT, 0, 2.4f * u);
     dl->AddText(font, 22 * u, ImVec2(left + 36 * u, top + 6 * u), TEXT, "talaz");
 
+    if (mods::Mod* open = page) {
+        draw_page(dl, *open, left, top, u);
+        return;
+    }
+
     float gap = 12 * u, w = (960 * u - 3 * gap) / 4, h = 132 * u, r = 14 * u;
     int i = 0;
     for (mods::Mod& m : mods::all()) {
@@ -98,8 +193,15 @@ void draw(ImVec2 size, float dt) {
         ImVec2 b(a.x + std::round(w), a.y + std::round(h));
         i++;
         bool hover = mouse.x >= a.x && mouse.x < b.x && mouse.y >= a.y && mouse.y < b.y;
-        if (hover && ImGui::IsMouseClicked(0))
+        if (hover && ImGui::IsMouseClicked(0) && !inside(mouse, ImVec2(b.x - 40 * u, a.y + 8 * u), ImVec2(b.x, a.y + 36 * u)))
             mods::toggle(m.id);
+        // three dots in the corner, or a right click, open the mod's own page
+        ImVec2 dots(b.x - 26 * u, a.y + 22 * u);
+        bool over_dots = inside(mouse, ImVec2(dots.x - 12 * u, dots.y - 12 * u), ImVec2(dots.x + 18 * u, dots.y + 12 * u));
+        if ((over_dots && ImGui::IsMouseClicked(0)) || (hover && ImGui::IsMouseClicked(1))) {
+            page = &m;
+            continue;
+        }
         bool on = mods::enabled(m.id);
         m.level += ((on ? 1.f : 0.f) - m.level) * std::min(1.f, dt * 10);
 
@@ -114,13 +216,18 @@ void draw(ImVec2 size, float dt) {
         }
         dl->AddRect(a, b, on ? ACCENT : hover ? MUTED : LINE, r, 0, std::max(1.f, u));
         dl->AddText(font, 15 * u, ImVec2(a.x + 16 * u, a.y + 14 * u), TEXT, m.name);
+        for (int d = 0; d < 3; d++)
+            dl->AddCircleFilled(ImVec2(b.x - 32 * u + d * 6 * u, a.y + 22 * u), 1.8f * u, over_dots ? TEXT : MUTED);
+        // the first setting under the name, so the tile tells what it is set to
+        if (std::string opt = mods::option_text(m.id); !opt.empty())
+            dl->AddText(font, 12.5f * u, ImVec2(a.x + 16 * u, a.y + 36 * u), on ? ACCENT : MUTED, opt.c_str());
         float note = 12.5f * u;
         ImVec2 ns = font->CalcTextSizeA(note, FLT_MAX, w - 32 * u, m.note);
         dl->AddText(font, note, ImVec2(a.x + 16 * u, b.y - 14 * u - ns.y), on ? TEXT : MUTED, m.note, nullptr, w - 32 * u);
     }
 
     float foot = top + 64 * u + (i + 3) / 4 * (h + gap) + 8 * u, small = 12.5f * u;
-    dl->AddText(font, small, ImVec2(left, foot), MUTED, "Click a tile to turn it on.");
+    dl->AddText(font, small, ImVec2(left, foot), MUTED, "Click a tile to turn it on. Its dots, or a right click, open its settings.");
     std::string profile = "Profile: " + config::profile();
     ImVec2 ps = font->CalcTextSizeA(small, FLT_MAX, 0, profile.c_str());
     dl->AddText(font, small, ImVec2(left + 960 * u - ps.x, foot), MUTED, profile.c_str());
@@ -132,7 +239,12 @@ void connect(bool (*locked)(), const int* menubar) {
     mouse_locked = locked;
     menubar_height = menubar;
     // for looking at the menu without entering a world
-    wanted = std::getenv("TALAZ_PREVIEW") != nullptr;
+    // TALAZ_PREVIEW=zoom opens that mod's page
+    const char* preview = std::getenv("TALAZ_PREVIEW");
+    wanted = preview != nullptr;
+    for (mods::Mod& m : mods::all())
+        if (preview && std::string(preview) == m.id)
+            page = &m;
 }
 
 bool key(int key, int action) {
@@ -141,6 +253,10 @@ bool key(int key, int action) {
     // game only holds the mouse while nothing is open
     if (action == KEY_PRESS && key == int(config::get("key.menu")) && (wanted || playing())) {
         wanted = !wanted;
+        return true;
+    }
+    if (wanted && action == KEY_PRESS && key == KEY_ESCAPE && page) {
+        page = nullptr;
         return true;
     }
     if (wanted && action == KEY_PRESS && key == KEY_ESCAPE) {

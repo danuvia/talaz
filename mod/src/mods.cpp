@@ -247,6 +247,47 @@ std::span<Mod> all() { return list; }
 
 bool enabled(const char* id) { return config::on(std::string(id) + ".enabled"); }
 
+// Every mod's settings, shown on its own page in the menu: a slider from min to
+// max, or a switch when there is no step
+const Setting SETTINGS[] = {
+        {"zoom", "Zoom", "zoom.factor", "\u00d7", 1.5f, 10, 0.5f},
+        {"zoom", "Smooth zoom", "zoom.smooth"},
+        {"fpslimit", "Frame cap", "fpslimit.cap", " fps", 20, 240, 5},
+        {"motionblur", "Amount", "motionblur.amount", "%", 10, 90, 5},
+        {"clock", "24-hour clock", "clock.24h"},
+        {"keystrokes", "Mouse buttons", "keystrokes.mouse"},
+        {"keystrokes", "Space bar", "keystrokes.space"},
+};
+
+std::vector<const Setting*> settings_of(const char* id) {
+    std::vector<const Setting*> out;
+    for (const Setting& s : SETTINGS)
+        if (std::strcmp(s.mod, id) == 0)
+            out.push_back(&s);
+    return out;
+}
+
+std::string setting_text(const Setting& s, float value) {
+    if (s.is_switch())
+        return value != 0 ? "On" : "Off";
+    char buf[32];
+    std::snprintf(buf, sizeof buf, "%g%s", value, s.unit);
+    return buf;
+}
+
+std::string option_text(const char* id) {
+    auto list = settings_of(id);
+    return list.empty() || list[0]->is_switch() ? std::string() : setting_text(*list[0], config::get(list[0]->key));
+}
+
+void set_setting(const Setting& s, float value, bool save) {
+    if (!s.is_switch())
+        value = std::clamp(s.min + std::round((value - s.min) / s.step) * s.step, s.min, s.max);
+    config::set(s.key, value);
+    if (save)
+        config::save();
+}
+
 void toggle(const char* id) {
     config::set(std::string(id) + ".enabled", enabled(id) ? 0 : 1);
     config::save();
@@ -255,18 +296,15 @@ void toggle(const char* id) {
 void declare() {
     for (const Mod& mod : list)
         config::declare(std::string(mod.id) + ".enabled", 0);
-    int i = 0;
-    for (const char* hud : HUDS) {
-        // fractions of the screen, so a HUD stays put across window sizes
-        config::declare(std::string(hud) + ".x", 0.008f);
-        config::declare(std::string(hud) + ".y", 0.015f + 0.055f * i++);
-    }
     config::declare("fpslimit.cap", 60);
-    config::declare("nightvision.strength", 4);
     config::declare("motionblur.amount", 50);
     config::declare("key.zoom", 'C');
     config::declare("key.sprint", 17);
     config::declare("zoom.factor", 4);
+    config::declare("zoom.smooth", 1);
+    config::declare("clock.24h", 1);
+    config::declare("keystrokes.mouse", 1);
+    config::declare("keystrokes.space", 1);
 }
 
 void limit_fps() {
@@ -388,7 +426,7 @@ void tick(float dt) {
 
     set_night_vision(enabled("nightvision"));
     float target = zoom_held ? 1 / config::get("zoom.factor") : 1;
-    zoom_now += (target - zoom_now) * (1 - std::exp(-dt * 12));
+    zoom_now = config::get("zoom.smooth") != 0 ? zoom_now + (target - zoom_now) * (1 - std::exp(-dt * 12)) : target;
 }
 
 bool effects_visible() {
@@ -407,7 +445,10 @@ void draw_effects(ImDrawList* dl) {
         return;
     }
     if (have_last) {
-        int alpha = int(255 * std::clamp(config::get("motionblur.amount") / 100, 0.f, 0.9f));
+        // the last frame keeps amount of itself per 60th of a second, like the Java mods,
+        // so the trail is as long at 200 fps as at 60
+        float keep = std::pow(std::clamp(config::get("motionblur.amount") / 100, 0.f, 0.9f), ImGui::GetIO().DeltaTime * 60);
+        int alpha = int(255 * keep);
         // a copied frame is stored bottom up
         dl->AddImage(ImTextureID(intptr_t(last)), ImVec2(0, 0), size, ImVec2(0, 1), ImVec2(1, 0), IM_COL32(255, 255, 255, alpha));
     }
@@ -431,36 +472,59 @@ bool hud_visible() {
     return std::any_of(std::begin(HUDS), std::end(HUDS), [](const char* hud) { return enabled(hud); });
 }
 
+// Whether the game draws its paper doll in the top left corner, from its own
+// settings. Read again every few seconds, so turning it off in the game counts
+bool paper_doll() {
+    static bool shown = true;
+    static Clock::time_point next;
+    if (Clock::now() < next)
+        return shown;
+    next = Clock::now() + std::chrono::seconds(3);
+    if (FILE* f = std::fopen("/data/data/com.mojang.minecraftpe/games/com.mojang/minecraftpe/options.txt", "r")) {
+        char line[256];
+        while (std::fgets(line, sizeof line, f))
+            if (std::strncmp(line, "gfx_hidepaperdoll:", 18) == 0 && shown != (line[18] == '0')) {
+                shown = line[18] == '0';
+                __android_log_print(ANDROID_LOG_INFO, CLIENT_NAME, "Paper doll %s", shown ? "shown" : "hidden");
+            }
+        std::fclose(f);
+    }
+    return shown;
+}
+
+// The HUDs stack down the left edge in a fixed order, each below the one before,
+// so they never overlap. They start below the game's paper doll when it shows
+// ponytail: the paper doll's size is guessed from the screen height. Ask the game for its HUD layout once the mod can
 void draw_hud(ImDrawList* dl, float u, ImFont* font) {
     using namespace theme;
     ImVec2 display = ImGui::GetIO().DisplaySize;
-    auto at = [&](const char* id) {
-        return ImVec2(std::round(config::get(std::string(id) + ".x") * display.x),
-                      std::round(config::get(std::string(id) + ".y") * display.y));
-    };
-    auto label = [&](const char* id, const char* str) {
-        ImVec2 a = at(id);
+    float x = std::round(12 * u), y = std::round(paper_doll() ? display.y * 0.2f : 12 * u), gap = 6 * u;
+    auto label = [&](const char* str) {
         float size = 14 * u, px = 10 * u, py = 6 * u;
         ImVec2 box = font->CalcTextSizeA(size, FLT_MAX, 0, str);
-        dl->AddRectFilled(a, ImVec2(a.x + box.x + 2 * px, a.y + box.y + 2 * py), PANEL, 8 * u);
-        dl->AddText(font, size, ImVec2(std::round(a.x + px), std::round(a.y + py)), TEXT, str);
+        dl->AddRectFilled(ImVec2(x, y), ImVec2(x + box.x + 2 * px, y + box.y + 2 * py), PANEL, 8 * u);
+        dl->AddText(font, size, ImVec2(std::round(x + px), std::round(y + py)), TEXT, str);
+        y = std::round(y + box.y + 2 * py + gap);
     };
 
     char buf[64];
     if (enabled("fps")) {
         std::snprintf(buf, sizeof buf, "%d FPS", fps);
-        label("fps", buf);
+        label(buf);
     }
     if (enabled("cps")) {
         std::snprintf(buf, sizeof buf, "%zu | %zu CPS", cps[0], cps[1]);
-        label("cps", buf);
+        label(buf);
     }
     if (enabled("clock")) {
         time_t now = time(nullptr);
         tm parts{};
         localtime_r(&now, &parts);
-        std::snprintf(buf, sizeof buf, "%02d:%02d", parts.tm_hour, parts.tm_min);
-        label("clock", buf);
+        if (config::get("clock.24h") != 0)
+            std::snprintf(buf, sizeof buf, "%02d:%02d", parts.tm_hour, parts.tm_min);
+        else
+            std::snprintf(buf, sizeof buf, "%d:%02d %s", (parts.tm_hour + 11) % 12 + 1, parts.tm_min, parts.tm_hour < 12 ? "AM" : "PM");
+        label(buf);
     }
     if (enabled("session")) {
         long s = std::chrono::duration_cast<std::chrono::seconds>(Clock::now() - started).count();
@@ -468,10 +532,10 @@ void draw_hud(ImDrawList* dl, float u, ImFont* font) {
             std::snprintf(buf, sizeof buf, "%ld:%02ld:%02ld", s / 3600, s / 60 % 60, s % 60);
         else
             std::snprintf(buf, sizeof buf, "%ld:%02ld", s / 60, s % 60);
-        label("session", buf);
+        label(buf);
     }
     if (enabled("keystrokes")) {
-        ImVec2 o = at("keystrokes");
+        ImVec2 o(x, y);
         float k = 34 * u, gap = 4 * u, size = 12.5f * u;
         // a pressed key fills with the accent, like a tile that is on
         auto key = [&](float x, float y, float w, float h, bool down, const char* str) {
@@ -486,9 +550,14 @@ void draw_hud(ImDrawList* dl, float u, ImFont* font) {
         key(0, row, k, k, keys[1], "A");
         key(row, row, k, k, keys[2], "S");
         key(2 * row, row, k, k, keys[3], "D");
-        key(0, 2 * row, wide, k, buttons[0], "LMB");
-        key(wide + gap, 2 * row, wide, k, buttons[1], "RMB");
-        key(0, 3 * row, 3 * k + 2 * gap, k / 2, keys[4], "");
+        float next = 2 * row;
+        if (config::get("keystrokes.mouse") != 0) {
+            key(0, next, wide, k, buttons[0], "LMB");
+            key(wide + gap, next, wide, k, buttons[1], "RMB");
+            next += row;
+        }
+        if (config::get("keystrokes.space") != 0)
+            key(0, next, 3 * k + 2 * gap, k / 2, keys[4], "");
     }
 }
 
