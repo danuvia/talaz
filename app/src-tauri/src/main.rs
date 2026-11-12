@@ -497,7 +497,8 @@ fn start_screen(vanilla: &str) -> Option<String> {
 fn install_pack(game: &std::path::Path, version: &std::path::Path) -> std::io::Result<()> {
     let mojang = game.join("games/com.mojang");
     let dir = mojang.join("resource_packs/talaz");
-    let screen = ["assets/assets/resource_packs/vanilla/ui/start_screen.json", "assets/resource_packs/vanilla/ui/start_screen.json"]
+    // the Android game keeps the vanilla pack in its assets, the Windows one under data
+    let screen = ["assets/assets/resource_packs/vanilla/ui/start_screen.json", "assets/resource_packs/vanilla/ui/start_screen.json", "data/resource_packs/vanilla/ui/start_screen.json"]
         .iter()
         .find_map(|path| std::fs::read_to_string(version.join(path)).ok())
         .and_then(|vanilla| start_screen(&vanilla));

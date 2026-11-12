@@ -95,6 +95,29 @@ fn inject(pid: u32, dll: &Path) -> Result<HANDLE, String> {
     }
 }
 
+/// Where the Store installed the game, which holds the vanilla resource pack
+fn install_dir() -> Option<PathBuf> {
+    let out = Command::new("powershell")
+        .args(["-NoProfile", "-Command", "(Get-AppxPackage -Name Microsoft.MinecraftUWP).InstallLocation"])
+        .output()
+        .ok()?;
+    let path = PathBuf::from(String::from_utf8_lossy(&out.stdout).trim());
+    path.is_dir().then_some(path)
+}
+
+/// Puts Talaz's title screen pack in place. The game keeps a folder per account under
+/// Users as well as Shared, and which one reads global_resource_packs.json depends on
+/// the build, so every one gets the pack
+// ponytail: guessed from where players find their worlds. Narrow it down once a Windows game shows which folder it reads
+fn install_title_pack() {
+    let (Some(game), Some(users)) = (install_dir(), crate::game_dir().and_then(|shared| shared.parent().map(Path::to_path_buf))) else { return };
+    for entry in std::fs::read_dir(users).into_iter().flatten().flatten() {
+        if entry.path().is_dir() {
+            let _ = crate::install_pack(&entry.path(), &game);
+        }
+    }
+}
+
 /// Starts Minecraft, waits for it, loads the mod and follows the mod's log until the game closes
 pub fn play(app: AppHandle, mods: PathBuf) -> Result<(), String> {
     if !installed() {
@@ -104,6 +127,7 @@ pub fn play(app: AppHandle, mods: PathBuf) -> Result<(), String> {
         return Err("Minecraft is already running".into());
     }
     let dll = mods.join(MOD_FILE);
+    install_title_pack();
     // a game already open gets the mod too
     if game_pid().is_none() {
         if let Err(err) = Command::new("cmd").args(["/c", "start", "", "minecraft:"]).spawn() {
