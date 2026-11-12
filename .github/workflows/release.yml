@@ -1,5 +1,5 @@
-# A tag like v0.2.0 builds Talaz for both kinds of Mac and publishes a release with the
-# DMGs, the signed update archives and latest.json, which running launchers check at start.
+# A tag like v0.2.0 builds Talaz for both kinds of Mac and for Windows, and publishes a release with the
+# DMGs, the Windows installer, the signed update archives and latest.json, which running launchers check at start.
 # Needs the TAURI_SIGNING_PRIVATE_KEY secret: the contents of the updater key file.
 name: Release
 
@@ -60,6 +60,43 @@ jobs:
         with:
           projectPath: app/src-tauri
           args: --target ${{ matrix.target }}
+          tagName: ${{ github.ref_name }}
+          releaseName: Talaz ${{ github.ref_name }}
+          releaseDraft: true
+          includeUpdaterJson: true
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check out the mods
+        shell: bash
+        run: |
+          git config --global url."https://x-access-token:${{ secrets.MODS_TOKEN }}@github.com/danuvia/talaz-mods".insteadOf https://github.com/danuvia/talaz-mods
+          git submodule update --init --depth 1
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          install: mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja
+
+      - name: Build the mods
+        shell: msys2 {0}
+        run: |
+          cmake -S mod -B mod/build/windows -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build mod/build/windows
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+        with:
+          projectPath: app/src-tauri
+          args: --bundles nsis
           tagName: ${{ github.ref_name }}
           releaseName: Talaz ${{ github.ref_name }}
           releaseDraft: true
