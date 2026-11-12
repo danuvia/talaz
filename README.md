@@ -14,7 +14,7 @@ On first start Talaz asks you to sign in to Google Play and pick a folder for yo
 
 ## Windows
 
-Windows support is new and still being tested. Install Minecraft from the Microsoft Store or the Xbox app first. Talaz doesn't download the game on Windows, it starts the Minecraft you installed and loads its mods into it. The mods that reach into the game itself, like Zoom and Motion Blur, don't work there yet. Every push to `main` builds a Windows installer, which the Windows workflow's run keeps as an artifact.
+Windows support is new and still being tested. Install Minecraft from the Microsoft Store or the Xbox app first. Talaz doesn't download the game on Windows, it starts the Minecraft you installed and loads its mods into it. The mods that reach into the game itself, like Zoom and Motion Blur, don't work there yet. Every push to `main` builds a Windows installer and a Linux AppImage, which the Builds workflow's run keeps as artifacts.
 
 ## What's in it
 
@@ -44,7 +44,7 @@ On an Intel Mac or on Linux use `-DANDROID_ABI=x86_64` and `mod/build/x86_64`. T
 cd app/src-tauri && cargo run
 ```
 
-On Linux, install `mcpelauncher-client` and `mcpelauncher-extract` yourself for now. `cargo tauri build` makes the `.app` and the `.dmg`.
+On Linux, Talaz needs Flatpak: it installs mcpelauncher from Flathub by itself and runs the game inside it. `cargo tauri build` makes the `.app` and the `.dmg` on a Mac, the AppImage on Linux and the installer on Windows.
 
 ## Releases
 

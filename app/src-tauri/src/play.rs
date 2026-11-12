@@ -1,7 +1,7 @@
 //! Signs in to Google Play and downloads the game the account owns, the way a
 //! phone would. The requests follow Google-Play-API (Apache-2.0), see ATTRIBUTION.md.
 
-use std::{collections::HashMap, hash::{BuildHasher, Hasher}, path::PathBuf, process::Command, time::Duration};
+use std::{collections::HashMap, hash::{BuildHasher, Hasher}, path::PathBuf, time::Duration};
 
 use prost::Message;
 use serde::{Deserialize, Serialize};
@@ -628,7 +628,6 @@ pub fn install(app: AppHandle, code: i64, name: String) -> Result<(), String> {
         return Err("That is not a version".into());
     }
     runtime::ensure(&app)?;
-    let extract = runtime::tool("mcpelauncher-extract").ok_or("The game runtime has no unpacker")?;
     runtime::progress(&app, "Asking Google Play for the game", None);
     let mut store = Store::open(load().ok_or("Sign in with Google first")?)?;
     let data = store
@@ -669,7 +668,8 @@ pub fn install(app: AppHandle, code: i64, name: String) -> Result<(), String> {
     let (part, dest) = (versions.join(format!("{name}.part")), versions.join(&name));
     let _ = std::fs::remove_dir_all(&part);
     std::fs::create_dir_all(&part).map_err(|err| err.to_string())?;
-    let out = Command::new(extract).args(&paths).arg(&part).output().map_err(|err| err.to_string())?;
+    let mut extract = runtime::command("mcpelauncher-extract", &[&root]).ok_or("The game runtime has no unpacker")?;
+    let out = extract.args(&paths).arg(&part).output().map_err(|err| err.to_string())?;
     let _ = std::fs::remove_dir_all(&apks);
     if !out.status.success() || !part.join("lib").join(ABI).join("libminecraftpe.so").exists() {
         let _ = std::fs::remove_dir_all(&part);

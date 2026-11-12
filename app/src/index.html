@@ -233,8 +233,8 @@ talaz
 <div class="step" data-step="1" hidden>
 <h3>Your account</h3>
 <p>Talaz downloads the game from the account you bought it with. You can also do this later, from Settings.</p>
-<button class="choice" id="setup-google"><span>Google<small id="setup-who">The Android version, for Mac</small></span><span aria-hidden="true">→</span></button>
-<button class="choice" disabled><span>Microsoft<small>The Windows version, coming with Talaz for Windows and Linux</small></span></button>
+<button class="choice" id="setup-google"><span>Google<small id="setup-who">The Android version, for Mac and Linux</small></span><span aria-hidden="true">→</span></button>
+<button class="choice" disabled><span>Microsoft<small>The Windows version, used by Talaz for Windows</small></span></button>
 <div class="actions"><button class="link" data-back>Back</button><button class="btn" data-next id="setup-account">Skip for now</button></div>
 </div>
 <div class="step" data-step="3" hidden>
@@ -526,7 +526,7 @@ function setup(step) {
   setupStep = step;
   document.querySelectorAll('#setup .step').forEach((el) => (el.hidden = Number(el.dataset.step) !== step));
   document.querySelectorAll('#setup .steps i').forEach((el, i) => el.classList.toggle('done', i <= step));
-  $('setup-who').textContent = state.email ? `Signed in as ${state.email}` : 'The Android version, for Mac';
+  $('setup-who').textContent = state.email ? `Signed in as ${state.email}` : 'The Android version, for Mac and Linux';
   $('setup-account').textContent = state.email ? 'Next' : 'Skip for now';
   $('setup-path').textContent = setupFolder;
   const has = state.versions.length > 0;

@@ -1,5 +1,5 @@
-# A tag like v0.2.0 builds Talaz for both kinds of Mac and for Windows, and publishes a release with the
-# DMGs, the Windows installer, the signed update archives and latest.json, which running launchers check at start.
+# A tag like v0.2.0 builds Talaz for both kinds of Mac, Windows and Linux, and publishes a release with the
+# DMGs, the Windows installer, the AppImage, the signed update archives and latest.json, which running launchers check at start.
 # Needs the TAURI_SIGNING_PRIVATE_KEY secret: the contents of the updater key file.
 name: Release
 
@@ -97,6 +97,48 @@ jobs:
         with:
           projectPath: app/src-tauri
           args: --bundles nsis
+          tagName: ${{ github.ref_name }}
+          releaseName: Talaz ${{ github.ref_name }}
+          releaseDraft: true
+          includeUpdaterJson: true
+
+  linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check out the mods
+        run: |
+          git config --global url."https://x-access-token:${{ secrets.MODS_TOKEN }}@github.com/danuvia/talaz-mods".insteadOf https://github.com/danuvia/talaz-mods
+          git submodule update --init --depth 1
+
+      - uses: nttld/setup-ndk@v1
+        id: ndk
+        with:
+          ndk-version: r27c
+
+      - name: Build the mods
+        run: |
+          cmake -S mod -B mod/build/x86_64 \
+            -DCMAKE_TOOLCHAIN_FILE=${{ steps.ndk.outputs.ndk-path }}/build/cmake/android.toolchain.cmake \
+            -DANDROID_ABI=x86_64 -DANDROID_PLATFORM=android-28 -DANDROID_STL=c++_static -DCMAKE_BUILD_TYPE=Release
+          cmake --build mod/build/x86_64 -j4
+
+      - name: Install what Tauri needs
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+        with:
+          projectPath: app/src-tauri
+          args: --bundles appimage
           tagName: ${{ github.ref_name }}
           releaseName: Talaz ${{ github.ref_name }}
           releaseDraft: true

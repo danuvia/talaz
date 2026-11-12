@@ -1,5 +1,7 @@
 //! The program that runs the game. On a Mac, Talaz downloads the mcpelauncher
-//! build once and keeps it as its own app, so the game shows up as Talaz.
+//! build once and keeps it as its own app, so the game shows up as Talaz. On Linux
+//! mcpelauncher ships only on Flathub now, so Talaz installs it from there for the
+//! user and runs its programs inside it.
 
 use std::{
     io::{Read, Write},
@@ -25,14 +27,26 @@ fn bundle() -> Option<PathBuf> {
     Some(crate::root()?.join("runtime/Talaz.app"))
 }
 
-/// One of the runtime's programs, like mcpelauncher-client
-// ponytail: Linux takes them from PATH. Download a build there too once Talaz ships for Linux
-pub fn tool(name: &str) -> Option<PathBuf> {
+const FLATPAK_APP: &str = "io.mrarm.mcpelauncher";
+
+/// One of the runtime's programs, like mcpelauncher-client, ready for its arguments.
+/// On Linux it runs inside the Flatpak, which sees only the folders listed in reach
+pub fn command(name: &str, reach: &[&Path]) -> Option<Command> {
     if cfg!(target_os = "macos") {
         let path = bundle()?.join("Contents/MacOS").join(name);
-        return path.exists().then_some(path);
+        return path.exists().then(|| Command::new(path));
     }
-    std::env::split_paths(&std::env::var_os("PATH")?).map(|dir| dir.join(name)).find(|path| path.exists())
+    let mut cmd = Command::new("flatpak");
+    cmd.arg("run");
+    for dir in reach {
+        cmd.arg(format!("--filesystem={}", dir.display()));
+    }
+    cmd.arg(format!("--command={name}")).arg(FLATPAK_APP);
+    Some(cmd)
+}
+
+fn flatpak_ok(args: &[&str]) -> bool {
+    Command::new("flatpak").args(args).output().is_ok_and(|out| out.status.success())
 }
 
 fn run(program: &str, args: &[&std::ffi::OsStr]) -> Result<String, String> {
@@ -66,7 +80,20 @@ pub fn download(app: &AppHandle, text: &str, mut from: impl Read, to: &Path, don
 /// Makes sure the runtime is there, downloading it on first use
 pub fn ensure(app: &AppHandle) -> Result<(), String> {
     if !cfg!(target_os = "macos") {
-        return tool("mcpelauncher-client").map(drop).ok_or("Install mcpelauncher-client first".into());
+        let _guard = INSTALLING.lock().map_err(|err| err.to_string())?;
+        if !flatpak_ok(&["--version"]) {
+            return Err("Talaz needs Flatpak on Linux. Install it with your distribution's package manager, then press Play again".into());
+        }
+        if flatpak_ok(&["info", FLATPAK_APP]) {
+            return Ok(());
+        }
+        progress(app, "Installing the game runtime", None);
+        let _ = Command::new("flatpak").args(["remote-add", "--user", "--if-not-exists", "flathub", "https://dl.flathub.org/repo/flathub.flatpakrepo"]).output();
+        let out = Command::new("flatpak").args(["install", "--user", "-y", "--noninteractive", "flathub", FLATPAK_APP]).output().map_err(|err| err.to_string())?;
+        if !out.status.success() {
+            return Err(format!("Couldn't install the game runtime: {}", String::from_utf8_lossy(&out.stderr).trim()));
+        }
+        return Ok(());
     }
     let _guard = INSTALLING.lock().map_err(|err| err.to_string())?;
     let bundle = bundle().ok_or("No home folder")?;

@@ -579,12 +579,14 @@ fn play(app: tauri::AppHandle, version: String, width: u32, height: u32) -> Resu
     // the name comes from the page, so only take one that is installed
     let (_, game) = installed().into_iter().find(|(name, _)| *name == version).ok_or("That version is not installed")?;
     runtime::ensure(&app)?;
-    let client = runtime::tool("mcpelauncher-client").ok_or("The game runtime is missing")?;
-    let mut cmd = Command::new(client);
+    let mods = place_mod()?;
+    let data = game_dir();
+    let reach: Vec<&std::path::Path> = [Some(game.as_path()), data.as_deref(), Some(mods.as_path())].into_iter().flatten().collect();
+    let mut cmd = runtime::command("mcpelauncher-client", &reach).ok_or("The game runtime is missing")?;
     // without this the Xbox sign-in offers a passkey prompt that never opens
     cmd.env("QTWEBENGINE_CHROMIUM_FLAGS", "--disable-blink-features=WebAuth");
     cmd.arg("-dg").arg(&game);
-    if let Some(data) = game_dir() {
+    if let Some(data) = data {
         // first start: hide mcpelauncher's own menu bar over the game
         let settings = data.join("mcpelauncher-client-settings.txt");
         if !settings.exists() {
@@ -595,7 +597,7 @@ fn play(app: tauri::AppHandle, version: String, width: u32, height: u32) -> Resu
         let _ = install_pack(&data, &game);
         cmd.arg("-dd").arg(data).arg("-ww").arg(width.clamp(640, 7680).to_string()).arg("-wh").arg(height.clamp(360, 4320).to_string());
     }
-    cmd.arg("-m").arg(place_mod()?);
+    cmd.arg("-m").arg(mods);
     if RUNNING.swap(true, Ordering::SeqCst) {
         return Err("Minecraft is already running".into());
     }
