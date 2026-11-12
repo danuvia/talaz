@@ -1,6 +1,6 @@
 # Talaz
 
-A Minecraft Bedrock client for macOS and Linux, by Danuvia.
+A Minecraft Bedrock client for macOS, Linux and Windows, by Danuvia.
 
 Talaz runs the Android build of Bedrock through [mcpelauncher](https://github.com/minecraft-linux/mcpelauncher-manifest). It adds its own title screen and an in-game menu with mods, and it updates itself. You need to own Minecraft on Google Play.
 
@@ -11,6 +11,10 @@ Download the `.dmg` for your Mac from [Releases](https://github.com/danuvia/tala
 Talaz isn't signed with an Apple certificate yet, so macOS won't open it the first time. Right click Talaz in Applications, choose Open, then Open again in the dialog. If the dialog only offers Done, open System Settings, go to Privacy & Security and click Open Anyway next to the message about Talaz. You only do this once.
 
 On first start Talaz asks you to sign in to Google Play and pick a folder for your worlds. It downloads the game runtime and the version you choose, and Play starts it. New versions of Talaz install themselves when the launcher starts.
+
+## Windows
+
+Windows support is new and still being tested. Install Minecraft from the Microsoft Store or the Xbox app first. Talaz doesn't download the game on Windows, it starts the Minecraft you installed and loads its mods into it. The mods that reach into the game itself, like Zoom and Motion Blur, don't work there yet. Every push to `main` builds a Windows installer, which the Windows workflow's run keeps as an artifact.
 
 ## What's in it
 

@@ -212,9 +212,9 @@ talaz
 <p>The launcher's own. The rest of the game's settings stay in the game.</p>
 <div class="rows">
 <div class="list">
-<div class="row"><div>Game window<small>The size the game opens at</small></div><select id="size" aria-label="Game window size"></select></div>
+<div class="row" id="row-size"><div>Game window<small>The size the game opens at</small></div><select id="size" aria-label="Game window size"></select></div>
 <div class="row"><div>Faster graphics<small>Turns off vsync, fancy skies, smooth lighting, fancy leaves and clouds, and shortens the view to 10 chunks. Close the game first</small></div><button class="btn" id="faster">Apply</button></div>
-<div class="row"><div>Google Play<small id="who"></small></div><button class="btn" id="sign"></button></div>
+<div class="row" id="row-google"><div>Google Play<small id="who"></small></div><button class="btn" id="sign"></button></div>
 <div class="row"><div>Game folder<small>Worlds, resource packs and screenshots</small></div><button class="btn" id="folder">Open</button></div>
 </div>
 <p class="fine">Talaz 0.1.0 by Danuvia. Not affiliated with Mojang or Microsoft.</p>
@@ -236,6 +236,11 @@ talaz
 <button class="choice" id="setup-google"><span>Google<small id="setup-who">The Android version, for Mac</small></span><span aria-hidden="true">→</span></button>
 <button class="choice" disabled><span>Microsoft<small>The Windows version, coming with Talaz for Windows and Linux</small></span></button>
 <div class="actions"><button class="link" data-back>Back</button><button class="btn" data-next id="setup-account">Skip for now</button></div>
+</div>
+<div class="step" data-step="3" hidden>
+<h3>Minecraft</h3>
+<p id="setup-mc"></p>
+<div class="actions"><button class="link" data-back>Back</button><button class="btn" id="setup-mc-go"></button></div>
 </div>
 <div class="step" data-step="2" hidden>
 <h3>Game folder</h3>
@@ -302,7 +307,12 @@ async function run(text, job) {
 }
 
 function draw() {
+  // Windows: no Google, no downloads, no window size, one installed game
+  document.querySelector('[data-page="versions"]').hidden = state.windows;
+  $('row-google').hidden = $('row-size').hidden = state.windows;
+  document.querySelector('#home [data-page="versions"]').hidden = state.windows;
   // header chip and the account row
+  $('chip').hidden = state.windows;
   $('chip').replaceChildren(el('b', {}, state.email ? state.email[0] : '?'), el('span', {}, state.email ?? 'Sign in'));
   $('chip').dataset.page = 'settings';
   $('who').textContent = state.email ?? 'Not signed in';
@@ -317,7 +327,7 @@ function draw() {
   if (names.includes(want)) version.value = want;
   version.disabled = busy || !names.length;
   warn();
-  $('play').textContent = state.running ? 'Running' : names.length ? 'Play' : 'Get the game';
+  $('play').textContent = state.running ? 'Running' : names.length ? 'Play' : state.windows ? 'Install Minecraft' : 'Get the game';
   $('play').disabled = busy || state.running;
   const on = state.mods.filter((mod) => mod.on).length;
   $('fact-mods').textContent = on ? `${on} on` : 'All off';
@@ -484,6 +494,7 @@ $('log-copy').onclick = () => navigator.clipboard.writeText(logLines.filter(logM
 
 $('play').onclick = async () => {
   const version = $('version').value;
+  if (!version && state.windows) return setup(3, ($('setup').hidden = false));
   if (!version) return show('versions');
   const [width, height] = $('size').value.split('x').map(Number);
   working(true);
@@ -518,9 +529,21 @@ function setup(step) {
   $('setup-who').textContent = state.email ? `Signed in as ${state.email}` : 'The Android version, for Mac';
   $('setup-account').textContent = state.email ? 'Next' : 'Skip for now';
   $('setup-path').textContent = setupFolder;
+  const has = state.versions.length > 0;
+  $('setup-mc').textContent = has ? 'Found Minecraft for Windows. Talaz opens it with the mods from here on.' : 'Talaz runs on top of the Minecraft you own. Install it from the Microsoft Store or the Xbox app, then come back.';
+  $('setup-mc-go').textContent = has ? 'Done' : 'Open the Store';
 }
-document.querySelectorAll('#setup [data-next]').forEach((b) => (b.onclick = () => setup(setupStep + 1)));
-document.querySelectorAll('#setup [data-back]').forEach((b) => (b.onclick = () => setup(setupStep - 1)));
+// on Windows the steps are the welcome and Minecraft
+document.querySelectorAll('#setup [data-next]').forEach((b) => (b.onclick = () => setup(state.windows ? 3 : setupStep + 1)));
+document.querySelectorAll('#setup [data-back]').forEach((b) => (b.onclick = () => setup(state.windows ? 0 : setupStep - 1)));
+$('setup-mc-go').onclick = async () => {
+  if (!state.versions.length) {
+    invoke('open_store').catch((err) => say(String(err)));
+    // checked again when the player comes back to Talaz
+    return window.addEventListener('focus', () => refresh().then(() => setup(3)), { once: true });
+  }
+  $('setup-done').onclick();
+};
 $('setup-google').onclick = () => (state.email ? setup(2) : signIn());
 $('setup-change').onclick = async () => {
   const picked = await invoke('pick_folder').catch((err) => say(String(err)));

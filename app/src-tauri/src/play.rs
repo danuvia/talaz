@@ -53,6 +53,7 @@ fn save(account: &Account) -> Result<(), String> {
     let mut options = std::fs::OpenOptions::new();
     options.write(true).create(true).truncate(true);
     #[cfg(unix)]
+    #[cfg(unix)]
     std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
     let json = serde_json::to_vec(account).map_err(|err| err.to_string())?;
     std::io::Write::write_all(&mut options.open(file).map_err(|err| err.to_string())?, &json).map_err(|err| err.to_string())

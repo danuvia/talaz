@@ -16,13 +16,18 @@ static RUNNING: AtomicBool = AtomicBool::new(false);
 mod device;
 mod play;
 mod runtime;
+#[cfg(windows)]
+mod win;
 
 fn home() -> Option<PathBuf> {
-    Some(PathBuf::from(std::env::var_os("HOME")?))
+    Some(PathBuf::from(std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" })?))
 }
 
 /// Everything Talaz keeps: the runtime, the game versions, the game's own data and the sign-in
 pub fn root() -> Option<PathBuf> {
+    if cfg!(windows) {
+        return Some(PathBuf::from(std::env::var_os("APPDATA")?).join("Talaz"));
+    }
     Some(home()?.join(if cfg!(target_os = "macos") { "Library/Application Support/Talaz" } else { ".local/share/talaz" }))
 }
 
@@ -33,6 +38,11 @@ fn game_folder_file() -> Option<PathBuf> {
 
 /// The game's own data: worlds, resource packs, settings. Picked in the setup, Talaz's folder until then
 fn game_dir() -> Option<PathBuf> {
+    // the Windows game keeps its data where Minecraft decides, nothing to pick
+    // ponytail: the shared folder of the GDK builds, from what players report; per account folders sit beside it under Users
+    if cfg!(windows) {
+        return Some(PathBuf::from(std::env::var_os("APPDATA")?).join("Minecraft Bedrock/Users/Shared"));
+    }
     let picked = game_folder_file().and_then(|file| std::fs::read_to_string(file).ok()).map(|text| PathBuf::from(text.trim()));
     picked.filter(|dir| dir.is_absolute()).or_else(|| Some(root()?.join("game")))
 }
@@ -44,10 +54,13 @@ fn version_dirs() -> Vec<PathBuf> {
 }
 
 /// The mod, built before the launcher and carried inside it
-#[cfg(target_arch = "aarch64")]
+#[cfg(windows)]
+const MOD: &[u8] = include_bytes!("../../../mod/build/windows/libtalaz_bedrock.dll");
+#[cfg(all(not(windows), target_arch = "aarch64"))]
 const MOD: &[u8] = include_bytes!("../../../mod/build/arm64/libtalaz_bedrock.so");
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(not(windows), target_arch = "x86_64"))]
 const MOD: &[u8] = include_bytes!("../../../mod/build/x86_64/libtalaz_bedrock.so");
+const MOD_FILE: &str = if cfg!(windows) { "libtalaz_bedrock.dll" } else { "libtalaz_bedrock.so" };
 
 /// Where the game loads the mod from. The mod keeps its settings next to itself
 fn mods_dir() -> Option<PathBuf> {
@@ -57,11 +70,11 @@ fn mods_dir() -> Option<PathBuf> {
 /// Writes the mod out when it is missing or from another build of Talaz
 fn place_mod() -> Result<PathBuf, String> {
     let dir = mods_dir().ok_or("No home folder")?;
-    let lib = dir.join("libtalaz_bedrock.so");
+    let lib = dir.join(MOD_FILE);
     if std::fs::read(&lib).ok().as_deref() != Some(MOD) {
         std::fs::create_dir_all(&dir).map_err(|err| err.to_string())?;
         // a running game still has the old file open, so swap it instead of writing into it
-        let part = dir.join("libtalaz_bedrock.so.part");
+        let part = dir.join(format!("{MOD_FILE}.part"));
         std::fs::write(&part, MOD).and_then(|_| std::fs::rename(&part, &lib)).map_err(|err| err.to_string())?;
     }
     Ok(dir)
@@ -84,6 +97,10 @@ fn warning(version: String) -> Option<&'static str> {
 
 /// Installed game versions and where they are, newest first
 fn installed() -> Vec<(String, PathBuf)> {
+    // Windows has the one version the Store installed
+    #[cfg(windows)]
+    return if win::installed() { vec![("Minecraft for Windows".into(), PathBuf::new())] } else { Vec::new() };
+    #[allow(unreachable_code)]
     let mut found: Vec<(String, PathBuf)> = Vec::new();
     for dir in version_dirs() {
         for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
@@ -215,6 +232,8 @@ struct State {
     /// false until the first-run setup is done
     set_up: bool,
     game_folder: String,
+    /// The Windows launcher has no Google sign-in, game downloads or game folder
+    windows: bool,
 }
 
 #[tauri::command]
@@ -227,6 +246,7 @@ fn state() -> State {
         running: RUNNING.load(Ordering::SeqCst),
         set_up: game_folder_file().is_some_and(|file| file.exists()),
         game_folder: game_dir().map(|dir| dir.display().to_string()).unwrap_or_default(),
+        windows: cfg!(windows),
         mods: mods_def()
             .0
             .iter()
@@ -537,16 +557,25 @@ fn finish_setup(folder: String) -> Result<(), String> {
     std::fs::write(file, folder).map_err(|err| err.to_string())
 }
 
+/// Minecraft's page in the Microsoft Store, for a Windows player who hasn't installed it
+#[tauri::command]
+fn open_store() -> Result<(), String> {
+    Command::new("cmd").args(["/c", "start", "", "ms-windows-store://pdp/?productid=9NBLGGH2JHXJ"]).spawn().map(drop).map_err(|err| err.to_string())
+}
+
 /// Shows the folder with the worlds and resource packs
 #[tauri::command]
 fn open_game_folder() -> Result<(), String> {
     let dir = game_dir().ok_or("No home folder")?;
     std::fs::create_dir_all(&dir).map_err(|err| err.to_string())?;
-    Command::new(if cfg!(target_os = "macos") { "open" } else { "xdg-open" }).arg(dir).spawn().map(drop).map_err(|err| err.to_string())
+    Command::new(if cfg!(target_os = "macos") { "open" } else if cfg!(windows) { "explorer" } else { "xdg-open" }).arg(dir).spawn().map(drop).map_err(|err| err.to_string())
 }
 
 #[tauri::command(async)]
 fn play(app: tauri::AppHandle, version: String, width: u32, height: u32) -> Result<(), String> {
+    #[cfg(windows)]
+    return win::play(app, place_mod()?).map(|_| drop((version, width, height)));
+    #[allow(unreachable_code)]
     // the name comes from the page, so only take one that is installed
     let (_, game) = installed().into_iter().find(|(name, _)| *name == version).ok_or("That version is not installed")?;
     runtime::ensure(&app)?;
@@ -699,7 +728,7 @@ fn main() {
                 });
             });
         })
-        .invoke_handler(tauri::generate_handler![state, play, set_mod, set_option, remove, notes, warning, faster_graphics, open_game_folder, pick_folder, finish_setup, leave_full, play::available, play::sign_in, play::sign_out, play::install])
+        .invoke_handler(tauri::generate_handler![state, play, set_mod, set_option, remove, notes, warning, faster_graphics, open_game_folder, open_store, pick_folder, finish_setup, leave_full, play::available, play::sign_in, play::sign_out, play::install])
         .run(tauri::generate_context!())
         .expect("failed to start Talaz");
 }
