@@ -27,10 +27,14 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-          # the mods are a private repository until Talaz goes public, which the run's own token can't read
-          token: ${{ secrets.MODS_TOKEN || github.token }}
+
+      # the mods are a private repository until Talaz goes public, which the run's own
+      # token can't read; MODS_TOKEN reads only that one
+      - name: Check out the mods
+        shell: bash
+        run: |
+          git config --global url."https://x-access-token:${{ secrets.MODS_TOKEN }}@github.com/danuvia/talaz-mods".insteadOf https://github.com/danuvia/talaz-mods
+          git submodule update --init --depth 1
 
       - uses: nttld/setup-ndk@v1
         id: ndk
