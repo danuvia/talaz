@@ -106,6 +106,15 @@ jobs:
           releaseDraft: true
           includeUpdaterJson: true
 
+      # the mods alone, for people who inject them without the launcher
+      - name: Add the DLL
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cp mod/build/windows/libtalaz_bedrock.dll Talaz-Windows.dll
+          gh release upload ${{ github.ref_name }} Talaz-Windows.dll --clobber
+
   linux:
     runs-on: ubuntu-22.04
     steps:
