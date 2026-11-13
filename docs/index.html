@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Talaz</title>
+<meta name="description" content="A Minecraft Bedrock client for Windows, Mac and Linux, with zoom, motion blur, camera sway and HUDs.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 26 26' fill='none' stroke='%234FD8C4' stroke-width='2.4' stroke-linecap='round'%3E%3Cpath d='M2 10c4-5 7-5 11 0s7 5 11 0'/%3E%3Cpath d='M2 18c4-5 7-5 11 0s7 5 11 0'/%3E%3C/svg%3E">
+<style>
+@font-face { font-family: Poppins; src: url(Poppins-Regular.ttf); font-display: swap; }
+:root { --accent: #4FD8C4; --text: #E8EEF2; --muted: #9AA9B5; --deep: #0C1217; --line: #1E2A33; --water: rgba(79, 216, 196, 0.22); }
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; background: radial-gradient(900px 500px at 85% -10%, rgba(79, 216, 196, 0.12), transparent 70%), var(--deep); color: var(--text); font: 16px/1.6 Poppins, system-ui, sans-serif; }
+a { color: inherit; }
+main { max-width: 1080px; margin: 0 auto; padding: 0 24px 80px; }
+header { display: flex; align-items: center; justify-content: space-between; height: 84px; }
+.brand { display: flex; align-items: center; gap: 10px; font-size: 19px; text-decoration: none; }
+header nav a { color: var(--muted); text-decoration: none; margin-left: 24px; font-size: 15px; }
+header nav a:hover { color: var(--text); }
+.hero { padding: 72px 0 48px; }
+.eyebrow { color: var(--accent); letter-spacing: 4px; font-size: 13px; text-transform: uppercase; }
+h1 { font-weight: 400; font-size: clamp(48px, 9vw, 96px); line-height: 1; letter-spacing: -3px; margin: 14px 0 22px; }
+.lead { color: var(--muted); max-width: 560px; font-size: 18px; margin: 0 0 36px; }
+.get { display: inline-flex; align-items: center; gap: 12px; height: 60px; padding: 0 34px; border-radius: 999px; background: var(--accent); color: var(--deep); text-decoration: none; font-size: 18px; box-shadow: 0 10px 40px rgba(79, 216, 196, 0.25); transition: transform 0.2s; }
+.get:hover { transform: translateY(-2px); }
+.note { color: var(--muted); font-size: 14px; margin-top: 14px; min-height: 22px; }
+.others { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin: 40px 0 0; }
+.others a { display: block; padding: 18px 20px; border: 1px solid var(--line); border-radius: 18px; text-decoration: none; background: rgba(16, 23, 29, 0.7); transition: border-color 0.2s; }
+.others a:hover { border-color: var(--accent); }
+.others b { display: block; font-weight: 400; }
+.others span { color: var(--muted); font-size: 14px; }
+.shot { width: 100%; border-radius: 18px; border: 1px solid var(--line); margin: 64px 0 0; display: block; }
+h2 { font-weight: 400; font-size: 32px; letter-spacing: -1px; margin: 80px 0 24px; }
+.mods { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+.mods div { padding: 20px; border: 1px solid var(--line); border-radius: 18px; }
+.mods b { display: block; font-weight: 400; color: var(--accent); }
+.mods span { color: var(--muted); font-size: 15px; }
+footer { color: var(--muted); font-size: 14px; margin-top: 80px; padding-top: 24px; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; }
+@media (max-width: 600px) { header nav a:first-child { display: none; } .hero { padding-top: 32px; } }
+</style>
+</head>
+<body>
+<main>
+<header>
+  <a class="brand" href="./"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 26 26" fill="none" stroke="#4FD8C4" stroke-width="2.4" stroke-linecap="round"><path d="M2 10c4-5 7-5 11 0s7 5 11 0"/><path d="M2 18c4-5 7-5 11 0s7 5 11 0"/></svg>talaz</a>
+  <nav><a href="https://github.com/danuvia/talaz">GitHub</a><a href="https://discord.gg/" id="discord">Discord</a></nav>
+</header>
+
+<section class="hero">
+  <div class="eyebrow">Minecraft Bedrock client</div>
+  <h1>Talaz</h1>
+  <p class="lead">Zoom, motion blur, camera sway and movable HUDs for Bedrock, on Windows, Mac and Linux. Free and open source.</p>
+  <a class="get" id="get" href="https://github.com/danuvia/talaz/releases">Download Talaz</a>
+  <p class="note" id="note"></p>
+  <div class="others" id="others"></div>
+</section>
+
+<img class="shot" src="menu.png" alt="Talaz's in-game mod menu over Minecraft">
+
+<h2>What's in it</h2>
+<div class="mods">
+  <div><b>Zoom</b><span>Hold C to zoom in, scroll to zoom further.</span></div>
+  <div><b>Motion Blur</b><span>Smears the world the way the camera turns.</span></div>
+  <div><b>Camera Sway</b><span>The camera tilts as you strafe and kicks up when you jump.</span></div>
+  <div><b>Night Vision</b><span>Caves and nights are easy to see.</span></div>
+  <div><b>HUDs</b><span>FPS, CPS, keystrokes, a clock and session time, dragged where you want them.</span></div>
+  <div><b>Toggle Sprint</b><span>Press once to sprint and stop holding the key.</span></div>
+</div>
+
+<img class="shot" src="launcher.png" alt="The Talaz launcher">
+
+<footer><span>Made by Danuvia. Not affiliated with Mojang or Microsoft.</span><a href="https://github.com/danuvia/talaz">Source on GitHub</a></footer>
+</main>
+
+<script>
+// Finds the newest release, test builds included, and points the big button at the file for this computer
+const SYSTEMS = {
+  windows: { label: 'Windows', file: /Windows.*\.exe$/i, note: 'Install Minecraft from the Microsoft Store or the Xbox app first.' },
+  mac: { label: 'Mac', file: /Mac-Apple-Silicon\.dmg$/i, note: 'For Macs with Apple Silicon. Uses the Android version of Minecraft from Google Play.' },
+  linux: { label: 'Linux', file: /Linux.*\.AppImage$/i, note: 'Needs Flatpak. Uses the Android version of Minecraft from Google Play.' },
+};
+const ua = (navigator.userAgentData && navigator.userAgentData.platform || navigator.userAgent).toLowerCase();
+const mine = ua.includes('win') ? 'windows' : ua.includes('mac') ? 'mac' : ua.includes('linux') && !ua.includes('android') ? 'linux' : null;
+
+fetch('https://api.github.com/repos/danuvia/talaz/releases?per_page=5')
+  .then((res) => res.json())
+  .then((releases) => {
+    const release = releases.find((r) => !r.draft);
+    if (!release) return;
+    const url = (key) => (release.assets.find((a) => SYSTEMS[key].file.test(a.name)) || {}).browser_download_url;
+    const get = document.getElementById('get'), note = document.getElementById('note');
+    if (mine && url(mine)) {
+      get.href = url(mine);
+      get.textContent = `Download for ${SYSTEMS[mine].label}`;
+      note.textContent = `${release.prerelease ? 'Test build. ' : ''}${SYSTEMS[mine].note}`;
+    }
+    document.getElementById('others').innerHTML = Object.keys(SYSTEMS)
+      .filter((key) => key !== mine && url(key))
+      .map((key) => `<a href="${url(key)}"><b>${SYSTEMS[key].label}</b><span>${SYSTEMS[key].note}</span></a>`)
+      .join('');
+  })
+  .catch(() => {});
+</script>
+</body>
+</html>
