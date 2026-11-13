@@ -650,28 +650,6 @@ fn play(app: tauri::AppHandle, version: String, width: u32, height: u32) -> Resu
     Ok(())
 }
 
-/// Whether the window covers the whole screen the way OneClient's does
-static FULL: AtomicBool = AtomicBool::new(false);
-
-/// How far the notch reaches into the top of the screen, in points; nothing on screens without one
-#[cfg(target_os = "macos")]
-fn notch() -> f64 {
-    objc2::MainThreadMarker::new().and_then(objc2_app_kit::NSScreen::mainScreen).map_or(0.0, |screen| screen.safeAreaInsets().top)
-}
-#[cfg(not(target_os = "macos"))]
-fn notch() -> f64 {
-    0.0
-}
-
-/// Leaves the whole-screen mode, from Esc on the page
-#[tauri::command]
-fn leave_full(window: tauri::Window) {
-    if FULL.swap(false, Ordering::SeqCst) {
-        let _ = window.set_simple_fullscreen(false);
-        let _ = window.emit("full", 0.0);
-    }
-}
-
 /// Looks for a newer Talaz on GitHub Releases at start, installs it and starts again,
 /// like OneClient. The progress shows in the page's usual toast
 fn update(app: tauri::AppHandle) {
@@ -711,27 +689,7 @@ fn main() {
             update(app.handle().clone());
             Ok(())
         })
-        // macOS's own full screen leaves the notch's row black; the green button goes to the older
-        // whole-screen mode instead, which hides the menu bar and covers that row too
-        .on_window_event(|window, event| {
-            if !matches!(event, tauri::WindowEvent::Resized(_)) || !window.is_fullscreen().unwrap_or(false) || FULL.swap(true, Ordering::SeqCst) {
-                return;
-            }
-            let window = window.clone();
-            std::thread::spawn(move || {
-                // let macOS finish its own animation before stepping out of it
-                std::thread::sleep(std::time::Duration::from_millis(700));
-                let _ = window.set_fullscreen(false);
-                std::thread::sleep(std::time::Duration::from_millis(700));
-                let _ = window.set_simple_fullscreen(true);
-                // the page leaves the notch's height free at the top, read where AppKit wants it, on the main thread
-                let main = window.clone();
-                let _ = window.run_on_main_thread(move || {
-                    let _ = main.emit("full", notch());
-                });
-            });
-        })
-        .invoke_handler(tauri::generate_handler![state, play, set_mod, set_option, remove, notes, warning, faster_graphics, open_game_folder, open_store, pick_folder, finish_setup, leave_full, play::available, play::sign_in, play::sign_out, play::install])
+        .invoke_handler(tauri::generate_handler![state, play, set_mod, set_option, remove, notes, warning, faster_graphics, open_game_folder, open_store, pick_folder, finish_setup, play::available, play::sign_in, play::sign_out, play::install])
         .run(tauri::generate_context!())
         .expect("failed to start Talaz");
 }
