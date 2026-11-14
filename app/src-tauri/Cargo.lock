@@ -3477,6 +3477,7 @@ dependencies = [
 name = "talaz"
 version = "0.1.0"
 dependencies = [
+ "png",
  "prost",
  "serde",
  "serde_json",

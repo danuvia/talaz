@@ -45,15 +45,19 @@ pub fn command(name: &str, reach: &[&Path]) -> Option<Command> {
     Some(cmd)
 }
 
-/// The system's flatpak. The AppImage points the loader at its own libraries, which the
-/// system's programs then load and fail on, so those settings are taken off for it
-fn flatpak() -> Command {
-    let mut cmd = Command::new("flatpak");
+/// A program of the system's. The AppImage points the loader at its own libraries, which
+/// the system's programs then load and fail on, so those settings are taken off for them
+pub fn system(program: &str) -> Command {
+    let mut cmd = Command::new(program);
     for var in ["LD_LIBRARY_PATH", "LD_PRELOAD", "GIO_MODULE_DIR", "GIO_EXTRA_MODULES", "GSETTINGS_SCHEMA_DIR", "GDK_PIXBUF_MODULE_FILE",
                 "GDK_PIXBUF_MODULEDIR", "GTK_PATH", "GTK_EXE_PREFIX", "GTK_DATA_PREFIX", "PYTHONHOME", "PYTHONPATH"] {
         cmd.env_remove(var);
     }
     cmd
+}
+
+fn flatpak() -> Command {
+    system("flatpak")
 }
 
 fn flatpak_ok(args: &[&str]) -> bool {

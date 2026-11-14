@@ -30,6 +30,8 @@ nav i { position: absolute; top: 4px; left: 0; height: 32px; border-radius: 999p
 /* pages slide over each other */
 .page { position: absolute; inset: 64px 0 0; padding: 28px 56px 0; opacity: 0; transform: translateY(14px); pointer-events: none; transition: opacity 0.3s, transform 0.5s var(--ease); z-index: 1; }
 .page.on { opacity: 1; transform: none; pointer-events: auto; }
+/* a page taller than the window scrolls on its own, under the fixed top bar */
+#mods, #settings { overflow-y: auto; padding-bottom: 48px; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
 h2 { font-size: 30px; letter-spacing: -0.8px; }
 h2 + p { margin: 4px 0 26px; color: var(--muted); }
 

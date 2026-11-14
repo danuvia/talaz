@@ -503,6 +503,55 @@ fn start_screen(vanilla: &str) -> Option<String> {
     serde_json::to_string(&ui).ok()
 }
 
+/// Reads a PNG as 8-bit RGBA
+fn rgba(bytes: &[u8]) -> Option<(u32, u32, Vec<u8>)> {
+    let mut decoder = png::Decoder::new(std::io::Cursor::new(bytes));
+    decoder.set_transformations(png::Transformations::normalize_to_color8() | png::Transformations::ALPHA);
+    let mut reader = decoder.read_info().ok()?;
+    let mut buf = vec![0; reader.output_buffer_size()?];
+    let info = reader.next_frame(&mut buf).ok()?;
+    let pixels = &buf[..info.buffer_size()];
+    let data = match info.color_type {
+        png::ColorType::Rgba => pixels.to_vec(),
+        png::ColorType::GrayscaleAlpha => pixels.chunks(2).flat_map(|p| [p[0], p[0], p[0], p[1]]).collect(),
+        _ => return None,
+    };
+    Some((info.width, info.height, data))
+}
+
+/// The icons Food writes into item tooltips, as a glyph page the game's text can show:
+/// a full and a half shank, the same for food that hungers you, then a full and a half
+/// saturation mark. The shanks come from the game's own textures, so none of Mojang's
+/// art ships with Talaz. 16-pixel cells with the 9-pixel icon three rows down, like the
+/// game's own glyphs
+fn food_glyphs(version: &std::path::Path) -> Option<Vec<u8>> {
+    let game = |name: &str| {
+        ["assets/assets/resource_packs/vanilla/textures/ui/", "assets/resource_packs/vanilla/textures/ui/", "data/resource_packs/vanilla/textures/ui/"]
+            .iter()
+            .find_map(|dir| std::fs::read(version.join(format!("{dir}{name}.png"))).ok())
+    };
+    let ours = |name: &str| PACK.iter().find(|(path, _)| path.ends_with(name)).map(|(_, bytes)| bytes.to_vec());
+    let icons = [game("hunger_full"), game("hunger_half"), game("hunger_effect_full"), game("hunger_effect_half"),
+                 ours("saturation_full.png"), ours("saturation_half.png")];
+    let mut page = vec![0u8; 256 * 256 * 4];
+    for (cell, icon) in icons.iter().enumerate() {
+        let (w, h, data) = rgba(icon.as_ref()?)?;
+        for y in 0..h.min(13) {
+            for x in 0..w.min(16) {
+                let from = ((y * w + x) * 4) as usize;
+                let to = (((y + 3) * 256 + cell as u32 * 16 + x) * 4) as usize;
+                page[to..to + 4].copy_from_slice(&data[from..from + 4]);
+            }
+        }
+    }
+    let mut out = Vec::new();
+    let mut encoder = png::Encoder::new(&mut out, 256, 256);
+    encoder.set_color(png::ColorType::Rgba);
+    encoder.set_depth(png::BitDepth::Eight);
+    encoder.write_header().ok()?.write_image_data(&page).ok()?;
+    Some(out)
+}
+
 /// Puts the pack in the game's folder and turns it on for everything, first in the list
 fn install_pack(game: &std::path::Path, version: &std::path::Path) -> std::io::Result<()> {
     let mojang = game.join("games/com.mojang");
@@ -517,7 +566,8 @@ fn install_pack(game: &std::path::Path, version: &std::path::Path) -> std::io::R
         let _ = std::fs::remove_file(dir.join("ui/start_screen.json"));
         return Ok(());
     };
-    let files = PACK.iter().map(|&(name, bytes)| (name, bytes.to_vec())).chain([("ui/start_screen.json", screen.into_bytes())]);
+    let glyphs = food_glyphs(version).map(|page| ("font/glyph_E2.png", page));
+    let files = PACK.iter().map(|&(name, bytes)| (name, bytes.to_vec())).chain([("ui/start_screen.json", screen.into_bytes())]).chain(glyphs);
     for (name, bytes) in files {
         let path = dir.join(name);
         std::fs::create_dir_all(path.parent().unwrap_or(&dir))?;
@@ -548,7 +598,7 @@ fn pick_folder() -> Result<Option<String>, String> {
     let out = if cfg!(target_os = "macos") {
         Command::new("osascript").args(["-e", "POSIX path of (choose folder with prompt \"Where should the game keep its worlds?\")"]).output()
     } else {
-        Command::new("zenity").args(["--file-selection", "--directory"]).output()
+        runtime::system("zenity").args(["--file-selection", "--directory"]).output()
     }
     .map_err(|err| err.to_string())?;
     let path = String::from_utf8_lossy(&out.stdout).trim().trim_end_matches('/').to_string();
@@ -579,7 +629,7 @@ fn open_store() -> Result<(), String> {
 fn open_game_folder() -> Result<(), String> {
     let dir = game_dir().ok_or("No home folder")?;
     std::fs::create_dir_all(&dir).map_err(|err| err.to_string())?;
-    Command::new(if cfg!(target_os = "macos") { "open" } else if cfg!(windows) { "explorer" } else { "xdg-open" }).arg(dir).spawn().map(drop).map_err(|err| err.to_string())
+    runtime::system(if cfg!(target_os = "macos") { "open" } else if cfg!(windows) { "explorer" } else { "xdg-open" }).arg(dir).spawn().map(drop).map_err(|err| err.to_string())
 }
 
 #[tauri::command(async)]
@@ -596,6 +646,13 @@ fn play(app: tauri::AppHandle, version: String, width: u32, height: u32) -> Resu
     let mut cmd = runtime::command("mcpelauncher-client", &reach).ok_or("The game runtime is missing")?;
     // without this the Xbox sign-in offers a passkey prompt that never opens
     cmd.env("QTWEBENGINE_CHROMIUM_FLAGS", "--disable-blink-features=WebAuth");
+    // on Linux the graphics driver holds vsync on whatever the game asks, so when the game's
+    // own setting has it off the drivers are told too: Mesa's and NVIDIA's switches
+    let vsync_off = data.as_ref().and_then(|dir| std::fs::read_to_string(dir.join("games/com.mojang/minecraftpe/options.txt")).ok())
+        .is_some_and(|text| text.lines().any(|line| line.trim() == "gfx_vsync:0"));
+    if cfg!(target_os = "linux") && vsync_off {
+        cmd.env("vblank_mode", "0").env("__GL_SYNC_TO_VBLANK", "0");
+    }
     cmd.arg("-dg").arg(&game);
     if let Some(data) = data {
         // first start: hide mcpelauncher's own menu bar over the game
