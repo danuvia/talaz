@@ -380,6 +380,9 @@ const PACK: &[(&str, &[u8])] = &[
     ("manifest.json", include_bytes!("../../../mod/pack/manifest.json")),
     ("textures/ui/talaz/clear.png", include_bytes!("../../../mod/pack/textures/ui/talaz/clear.png")),
     ("textures/ui/talaz/white.png", include_bytes!("../../../mod/pack/textures/ui/talaz/white.png")),
+    ("textures/ui/talaz/saturation_full.png", include_bytes!("../../../mod/pack/textures/ui/talaz/saturation_full.png")),
+    ("textures/ui/talaz/saturation_half.png", include_bytes!("../../../mod/pack/textures/ui/talaz/saturation_half.png")),
+    ("textures/ui/talaz/exhaustion.png", include_bytes!("../../../mod/pack/textures/ui/talaz/exhaustion.png")),
 ];
 
 // name, the game's button, x, y, w, h as fractions of the screen; the same spots as mod/src/title.cpp
