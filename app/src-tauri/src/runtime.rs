@@ -36,7 +36,7 @@ pub fn command(name: &str, reach: &[&Path]) -> Option<Command> {
         let path = bundle()?.join("Contents/MacOS").join(name);
         return path.exists().then(|| Command::new(path));
     }
-    let mut cmd = Command::new("flatpak");
+    let mut cmd = flatpak();
     cmd.arg("run");
     for dir in reach {
         cmd.arg(format!("--filesystem={}", dir.display()));
@@ -45,8 +45,19 @@ pub fn command(name: &str, reach: &[&Path]) -> Option<Command> {
     Some(cmd)
 }
 
+/// The system's flatpak. The AppImage points the loader at its own libraries, which the
+/// system's programs then load and fail on, so those settings are taken off for it
+fn flatpak() -> Command {
+    let mut cmd = Command::new("flatpak");
+    for var in ["LD_LIBRARY_PATH", "LD_PRELOAD", "GIO_MODULE_DIR", "GIO_EXTRA_MODULES", "GSETTINGS_SCHEMA_DIR", "GDK_PIXBUF_MODULE_FILE",
+                "GDK_PIXBUF_MODULEDIR", "GTK_PATH", "GTK_EXE_PREFIX", "GTK_DATA_PREFIX", "PYTHONHOME", "PYTHONPATH"] {
+        cmd.env_remove(var);
+    }
+    cmd
+}
+
 fn flatpak_ok(args: &[&str]) -> bool {
-    Command::new("flatpak").args(args).output().is_ok_and(|out| out.status.success())
+    flatpak().args(args).output().is_ok_and(|out| out.status.success())
 }
 
 fn run(program: &str, args: &[&std::ffi::OsStr]) -> Result<String, String> {
@@ -88,8 +99,8 @@ pub fn ensure(app: &AppHandle) -> Result<(), String> {
             return Ok(());
         }
         progress(app, "Installing the game runtime", None);
-        let _ = Command::new("flatpak").args(["remote-add", "--user", "--if-not-exists", "flathub", "https://dl.flathub.org/repo/flathub.flatpakrepo"]).output();
-        let out = Command::new("flatpak").args(["install", "--user", "-y", "--noninteractive", "flathub", FLATPAK_APP]).output().map_err(|err| err.to_string())?;
+        let _ = flatpak().args(["remote-add", "--user", "--if-not-exists", "flathub", "https://dl.flathub.org/repo/flathub.flatpakrepo"]).output();
+        let out = flatpak().args(["install", "--user", "-y", "--noninteractive", "flathub", FLATPAK_APP]).output().map_err(|err| err.to_string())?;
         if !out.status.success() {
             return Err(format!("Couldn't install the game runtime: {}", String::from_utf8_lossy(&out.stderr).trim()));
         }
