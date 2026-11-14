@@ -543,6 +543,12 @@ fn food_glyphs(version: &std::path::Path) -> Option<Vec<u8>> {
                 page[to..to + 4].copy_from_slice(&data[from..from + 4]);
             }
         }
+        // the game trims a glyph to its drawn columns, so a half icon, empty on the left,
+        // gets a barely-there pixel there to keep a whole icon's width
+        let corner = ((3 * 256 + cell as u32 * 16) * 4) as usize;
+        if page[corner + 3] == 0 {
+            page[corner + 3] = 1;
+        }
     }
     let mut out = Vec::new();
     let mut encoder = png::Encoder::new(&mut out, 256, 256);
