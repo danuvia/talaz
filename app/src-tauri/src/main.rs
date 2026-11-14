@@ -675,7 +675,20 @@ fn play(app: tauri::AppHandle, version: String, width: u32, height: u32) -> Resu
     if RUNNING.swap(true, Ordering::SeqCst) {
         return Err("Minecraft is already running".into());
     }
-    let mut child = match cmd.stdout(Stdio::piped()).stderr(Stdio::piped()).spawn() {
+    // The game writes straight into logs/latest.log rather than through the launcher, so
+    // closing the launcher leaves it nothing broken to write to. The last game's log is kept
+    // as previous.log, so a crash is still there after starting again
+    let log = root().map(|root| root.join("logs/latest.log"));
+    let file = log.as_ref().and_then(|path| {
+        std::fs::create_dir_all(path.parent()?).ok()?;
+        let _ = std::fs::rename(path, path.with_file_name("previous.log"));
+        std::fs::File::create(path).ok()
+    });
+    let (out, err) = match file.as_ref().map(|file| (file.try_clone(), file.try_clone())) {
+        Some((Ok(out), Ok(err))) => (Stdio::from(out), Stdio::from(err)),
+        _ => (Stdio::null(), Stdio::null()),
+    };
+    let mut child = match cmd.stdout(out).stderr(err).spawn() {
         Ok(child) => child,
         Err(err) => {
             RUNNING.store(false, Ordering::SeqCst);
@@ -683,38 +696,28 @@ fn play(app: tauri::AppHandle, version: String, width: u32, height: u32) -> Resu
         }
     };
     let _ = app.emit("game", true);
-    // the game's output goes to the page in batches: it can print thousands of lines a second
-    let (lines, batch) = std::sync::mpsc::channel::<String>();
-    let out = child.stdout.take().map(|pipe| Box::new(pipe) as Box<dyn std::io::Read + Send>);
-    let err = child.stderr.take().map(|pipe| Box::new(pipe) as Box<dyn std::io::Read + Send>);
-    for pipe in [out, err].into_iter().flatten() {
-        let lines = lines.clone();
+    // the page follows the file while the game runs, in batches since the game can print
+    // thousands of lines a second
+    if let Some(path) = log {
+        let log_app = app.clone();
         std::thread::spawn(move || {
-            for line in BufReader::new(pipe).lines().map_while(Result::ok) {
-                let _ = lines.send(line);
+            let Ok(file) = std::fs::File::open(path) else { return };
+            let mut reader = BufReader::new(file);
+            let mut line = String::new();
+            while RUNNING.load(Ordering::SeqCst) {
+                let mut lines = Vec::new();
+                // a line the game is still writing waits for its end
+                while reader.read_line(&mut line).is_ok_and(|n| n > 0) && line.ends_with('\n') {
+                    lines.push(line.trim_end().to_string());
+                    line.clear();
+                }
+                if !lines.is_empty() {
+                    let _ = log_app.emit("log", lines);
+                }
+                std::thread::sleep(std::time::Duration::from_millis(150));
             }
         });
     }
-    drop(lines);
-    let log_app = app.clone();
-    // and to logs/latest.log, which outlives the launcher's window
-    // the last game's log is kept as previous.log, so a crash is still there after starting again
-    let mut file = root().and_then(|root| {
-        std::fs::create_dir_all(root.join("logs")).ok()?;
-        let _ = std::fs::rename(root.join("logs/latest.log"), root.join("logs/previous.log"));
-        std::fs::File::create(root.join("logs/latest.log")).ok()
-    });
-    std::thread::spawn(move || {
-        while let Ok(first) = batch.recv() {
-            std::thread::sleep(std::time::Duration::from_millis(150));
-            let lines: Vec<String> = std::iter::once(first).chain(batch.try_iter()).collect();
-            if let Some(file) = file.as_mut() {
-                use std::io::Write;
-                let _ = file.write_all((lines.join("\n") + "\n").as_bytes());
-            }
-            let _ = log_app.emit("log", lines);
-        }
-    });
     std::thread::spawn(move || {
         let _ = child.wait();
         RUNNING.store(false, Ordering::SeqCst);
