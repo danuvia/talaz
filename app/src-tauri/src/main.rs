@@ -382,7 +382,14 @@ const PACK: &[(&str, &[u8])] = &[
     ("textures/ui/talaz/white.png", include_bytes!("../../../mod/pack/textures/ui/talaz/white.png")),
     ("textures/ui/talaz/saturation_full.png", include_bytes!("../../../mod/pack/textures/ui/talaz/saturation_full.png")),
     ("textures/ui/talaz/saturation_half.png", include_bytes!("../../../mod/pack/textures/ui/talaz/saturation_half.png")),
-    ("textures/ui/talaz/exhaustion.png", include_bytes!("../../../mod/pack/textures/ui/talaz/exhaustion.png")),
+    ("textures/ui/talaz/exhaustion_1.png", include_bytes!("../../../mod/pack/textures/ui/talaz/exhaustion_1.png")),
+    ("textures/ui/talaz/exhaustion_2.png", include_bytes!("../../../mod/pack/textures/ui/talaz/exhaustion_2.png")),
+    ("textures/ui/talaz/exhaustion_3.png", include_bytes!("../../../mod/pack/textures/ui/talaz/exhaustion_3.png")),
+    ("textures/ui/talaz/exhaustion_4.png", include_bytes!("../../../mod/pack/textures/ui/talaz/exhaustion_4.png")),
+    ("textures/ui/talaz/exhaustion_5.png", include_bytes!("../../../mod/pack/textures/ui/talaz/exhaustion_5.png")),
+    ("textures/ui/talaz/exhaustion_6.png", include_bytes!("../../../mod/pack/textures/ui/talaz/exhaustion_6.png")),
+    ("textures/ui/talaz/exhaustion_7.png", include_bytes!("../../../mod/pack/textures/ui/talaz/exhaustion_7.png")),
+    ("textures/ui/talaz/exhaustion_8.png", include_bytes!("../../../mod/pack/textures/ui/talaz/exhaustion_8.png")),
 ];
 
 // name, the game's button, x, y, w, h as fractions of the screen; the same spots as mod/src/title.cpp
