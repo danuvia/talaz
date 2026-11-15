@@ -15,6 +15,8 @@ static RUNNING: AtomicBool = AtomicBool::new(false);
 
 mod device;
 mod play;
+mod curseforge;
+mod packs;
 mod runtime;
 #[cfg(windows)]
 mod win;
@@ -765,7 +767,7 @@ fn main() {
             update(app.handle().clone());
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![state, play, set_mod, set_option, remove, notes, warning, faster_graphics, open_game_folder, open_store, pick_folder, finish_setup, play::available, play::sign_in, play::sign_out, play::install])
+        .invoke_handler(tauri::generate_handler![state, play, set_mod, set_option, remove, notes, warning, faster_graphics, open_game_folder, open_store, pick_folder, finish_setup, play::available, play::sign_in, play::sign_out, play::install, packs::packs, packs::set_pack, packs::import_pack, packs::pick_pack, packs::remove_pack, curseforge::browse, curseforge::install_pack, curseforge::open_page])
         .run(tauri::generate_context!())
         .expect("failed to start Talaz");
 }
