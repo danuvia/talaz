@@ -164,24 +164,6 @@ pub fn import_pack(path: String) -> Result<String, String> {
     Ok(folder)
 }
 
-/// Asks for a .mcpack with the system's picker
-#[tauri::command(async)]
-pub fn pick_pack() -> Result<Option<String>, String> {
-    use std::process::Command;
-    let out = if cfg!(target_os = "macos") {
-        Command::new("osascript").args(["-e", "POSIX path of (choose file with prompt \"Pick a resource pack (.mcpack or .zip)\")"]).output()
-    } else if cfg!(windows) {
-        Command::new("powershell")
-            .args(["-NoProfile", "-Command", "Add-Type -AssemblyName System.Windows.Forms; $d = New-Object System.Windows.Forms.OpenFileDialog; $d.Filter = 'Resource packs|*.mcpack;*.zip'; if ($d.ShowDialog() -eq 'OK') { $d.FileName }"])
-            .output()
-    } else {
-        super::runtime::system("zenity").args(["--file-selection", "--file-filter=*.mcpack *.zip"]).output()
-    }
-    .map_err(|e| e.to_string())?;
-    let path = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    Ok((out.status.success() && !path.is_empty()).then_some(path))
-}
-
 #[tauri::command]
 pub fn remove_pack(folder: String) -> Result<(), String> {
     if folder.is_empty() || folder.contains(['/', '\\']) || folder.starts_with('.') || folder == "talaz" {

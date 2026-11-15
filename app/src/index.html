@@ -1021,7 +1021,11 @@ for (const tab of document.querySelectorAll('[data-packs]')) tab.onclick = () =>
   $('browse').hidden = !browsing; $('mine').hidden = $('pack-add').hidden = $('packs-hint').hidden = browsing;
   if (browsing && !$('cf-cards').children.length) loadPacks().then(() => browse(false)); else if (!browsing) drawPacks();
 };
-$('pack-add').onclick = async () => { const path = await invoke('pick_pack').catch((err) => say(String(err))); if (path) addPack(path); };
+// the system's own file picker, through Tauri, opens straight away
+$('pack-add').onclick = async () => {
+  const path = await window.__TAURI__.dialog.open({ title: 'Pick a resource pack', filters: [{ name: 'Resource packs', extensions: ['mcpack', 'zip'] }] }).catch((err) => say(String(err)));
+  if (path) addPack(path);
+};
 listen('tauri://drag-drop', (event) => {
   const files = (event.payload.paths ?? []).filter((path) => /\.(mcpack|zip)$/i.test(path));
   if (files.length) { openInstance(insts.selected, 'textures'); files.forEach(addPack); }

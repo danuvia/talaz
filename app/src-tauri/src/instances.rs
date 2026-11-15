@@ -164,7 +164,6 @@ pub struct Edit {
     name: String,
     description: String,
     version: String,
-    vanilla: bool,
     shared: bool,
     width: u32,
     height: u32,

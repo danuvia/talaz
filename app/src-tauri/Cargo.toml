@@ -17,6 +17,7 @@ png = "0.18"
 zip = { version = "2", default-features = false, features = ["deflate"] }
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
+tauri-plugin-dialog = "2"
 
 # starting Minecraft and loading the mod into it
 [target.'cfg(windows)'.dependencies]
