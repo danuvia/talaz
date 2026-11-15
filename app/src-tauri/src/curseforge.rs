@@ -78,6 +78,9 @@ pub fn browse(search: String, sort: String, page: u32) -> Result<Vec<Item>, Stri
 /// Downloads the pack's newest file from CurseForge and adds it like a dropped .mcpack
 #[tauri::command(async)]
 pub fn install_pack(id: u64) -> Result<String, String> {
+    if super::packs::packs()?.iter().any(|p| p.curseforge() == Some(id)) {
+        return Err("That pack is already installed".into());
+    }
     let files = get(&format!("/mods/{id}/files"), &[("pageSize", "10".into())])?;
     let file = files["data"]
         .as_array()
@@ -97,7 +100,30 @@ pub fn install_pack(id: u64) -> Result<String, String> {
     drop(out);
     let result = super::packs::import_pack(path.to_string_lossy().to_string());
     let _ = std::fs::remove_dir_all(&dir);
-    result
+    let folder = result?;
+    super::packs::mark_source(&folder, id)?;
+    Ok(folder)
+}
+
+#[derive(Serialize)]
+pub struct Details {
+    description: String,
+    screenshots: Vec<String>,
+    updated: String,
+    files: u64,
+}
+
+/// What the pack's page shows: the author's description (HTML, cleaned on the page), screenshots
+#[tauri::command(async)]
+pub fn pack_details(id: u64) -> Result<Details, String> {
+    let m = get(&format!("/mods/{id}"), &[])?;
+    let d = get(&format!("/mods/{id}/description"), &[])?;
+    Ok(Details {
+        description: d["data"].as_str().unwrap_or_default().to_string(),
+        screenshots: m["data"]["screenshots"].as_array().into_iter().flatten().filter_map(|s| s["url"].as_str().map(str::to_string)).collect(),
+        updated: m["data"]["dateModified"].as_str().unwrap_or_default().to_string(),
+        files: m["data"]["latestFiles"].as_array().map_or(0, |f| f.len() as u64),
+    })
 }
 
 /// Opens the pack's CurseForge page in the browser

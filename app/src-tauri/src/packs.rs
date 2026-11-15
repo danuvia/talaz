@@ -12,6 +12,40 @@ pub struct Pack {
     description: String,
     uuid: String,
     on: bool,
+    /// pack_icon.png as a data URL, for the list
+    icon: Option<String>,
+    size: u64,
+    /// unix seconds the folder was made
+    added: u64,
+    /// the CurseForge project it came from, when Browse installed it
+    curseforge: Option<u64>,
+}
+
+/// Marks a pack Browse installed, so it isn't offered twice
+pub fn mark_source(folder: &str, id: u64) -> Result<(), String> {
+    std::fs::write(mojang()?.join("resource_packs").join(folder).join("talaz-source.json"), format!(r#"{{"curseforge":{id}}}"#)).map_err(|e| e.to_string())
+}
+
+fn base64(data: &[u8]) -> String {
+    const T: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity(data.len() * 4 / 3 + 4);
+    for c in data.chunks(3) {
+        let n = (c[0] as u32) << 16 | (*c.get(1).unwrap_or(&0) as u32) << 8 | *c.get(2).unwrap_or(&0) as u32;
+        for i in 0..4 {
+            out.push(if i <= c.len() { T[(n >> (18 - 6 * i) & 63) as usize] as char } else { '=' });
+        }
+    }
+    out
+}
+
+fn dir_size(path: &Path) -> u64 {
+    std::fs::read_dir(path).into_iter().flatten().flatten().map(|e| if e.path().is_dir() { dir_size(&e.path()) } else { e.metadata().map_or(0, |m| m.len()) }).sum()
+}
+
+impl Pack {
+    pub fn curseforge(&self) -> Option<u64> {
+        self.curseforge
+    }
 }
 
 fn mojang() -> Result<PathBuf, String> {
@@ -57,7 +91,16 @@ pub fn packs() -> Result<Vec<Pack>, String> {
         }
         let Some(h) = header(&entry.path()) else { continue };
         let uuid = h["uuid"].as_str().unwrap_or_default().to_string();
+        let path = entry.path();
+        // icons over 256 KB would bloat the page; those packs show a plain tile
+        let icon = std::fs::read(path.join("pack_icon.png")).ok().filter(|b| b.len() < 256 * 1024).map(|b| format!("data:image/png;base64,{}", base64(&b)));
+        let curseforge = std::fs::read_to_string(path.join("talaz-source.json")).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok()).and_then(|v| v["curseforge"].as_u64());
+        let added = path.metadata().and_then(|m| m.created().or(m.modified())).ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map_or(0, |d| d.as_secs());
         list.push(Pack {
+            icon,
+            size: dir_size(&path),
+            added,
+            curseforge,
             name: plain(h["name"].as_str().unwrap_or(&folder)),
             description: plain(h["description"].as_str().unwrap_or_default()),
             on: on.contains(&uuid),

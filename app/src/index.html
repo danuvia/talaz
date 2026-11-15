@@ -30,8 +30,14 @@ nav i { position: absolute; top: 4px; left: 0; height: 32px; border-radius: 999p
 /* pages slide over each other */
 .page { position: absolute; inset: 64px 0 0; padding: 28px 56px 0; opacity: 0; transform: translateY(14px); pointer-events: none; transition: opacity 0.3s, transform 0.5s var(--ease); z-index: 1; }
 .page.on { opacity: 1; transform: none; pointer-events: auto; }
+/* pages that are away are not drawn at all once they have faded */
+.page:not(.on) { visibility: hidden; transition: opacity 0.3s, transform 0.5s var(--ease), visibility 0s 0.5s; }
+/* the sea only rolls on Home; elsewhere repainting it under scrolling content made scrolling stutter */
+body:not([data-page=home]) .sea i { animation-play-state: paused; }
+.panels, .page { -webkit-overflow-scrolling: touch; }
+.card, .icard, .tile { transform: translateZ(0); }
 /* a page taller than the window scrolls on its own, under the fixed top bar */
-#mods, #settings, #packs { overflow-y: auto; padding-bottom: 48px; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+#settings, #instances, #versions { overflow-y: auto; padding-bottom: 48px; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
 h2 { font-size: 30px; letter-spacing: -0.8px; }
 h2 + p { margin: 4px 0 26px; color: var(--muted); }
 
@@ -117,6 +123,7 @@ h1 { font-size: 84px; line-height: 1; letter-spacing: -4px; margin: 10px 0 30px 
 .btn { height: 36px; padding: 0 16px; border: 1px solid var(--line); border-radius: 18px; transition: border-color 0.2s, background 0.2s, color 0.2s; }
 .btn:not(:disabled):hover { border-color: var(--accent); color: var(--accent); }
 .btn.sure { border-color: #E5707A; color: #E5707A; }
+.logbar select { appearance: none; height: 40px; padding: 0 36px 0 16px; border: 1px solid var(--line); border-radius: 20px; background: var(--ink) url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none' stroke='%239AA9B5' stroke-width='1.8' stroke-linecap='round'><path d='M1 1.5l5 5 5-5'/></svg>") no-repeat right 14px center; color: var(--text); cursor: pointer; }
 .row select { appearance: none; height: 36px; padding: 0 16px; border: 1px solid var(--line); border-radius: 18px; background: var(--ink); cursor: pointer; }
 .rows { max-width: 640px; }
 .fine { margin-top: 18px; font-size: 12px; color: var(--muted); }
@@ -155,11 +162,149 @@ h1 { font-size: 84px; line-height: 1; letter-spacing: -4px; margin: 10px 0 30px 
 /* log: the game's output, newest at the bottom */
 .logbar { display: flex; gap: 10px; margin-bottom: 12px; }
 .logbar input { flex: 1; height: 40px; padding: 0 16px; border: 1px solid var(--line); border-radius: 20px; background: var(--ink); }
-#log-lines { height: calc(100vh - 300px); margin: 0; padding: 14px 16px; overflow: auto; border: 1px solid var(--line); border-radius: 18px; background: var(--ink); color: var(--muted); font: 12px/1.6 ui-monospace, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere; -webkit-user-select: text; user-select: text; cursor: text; }
-#log-lines .err { color: #E8B45A; }
-#log-lines .times { color: var(--accent); font-weight: 400; }
+.loglines { height: calc(100vh - 360px); margin: 0; padding: 14px 16px; overflow: auto; border: 1px solid var(--line); border-radius: 18px; background: var(--ink); color: var(--muted); font: 12px/1.6 ui-monospace, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere; -webkit-user-select: text; user-select: text; cursor: text; }
+.loglines .err { color: #E8B45A; }
+.loglines .times { color: var(--accent); font-weight: 400; }
 #log-state.on { color: var(--accent); }
 
+
+/* instances, after OneClient: cards, an instance's own page with tabs, a wizard to make one */
+.titlebar { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+.btn.solid { background: var(--accent); border-color: var(--accent); color: var(--deep); }
+.btn.solid:not(:disabled):hover { color: var(--deep); filter: brightness(1.08); }
+.btn.big { height: 46px; padding: 0 34px; border-radius: 23px; font-size: 16px; }
+.icards { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; }
+.icard { position: relative; overflow: hidden; height: 168px; padding: 18px 20px; border: 1px solid var(--line); border-radius: 22px; background: linear-gradient(160deg, rgba(79, 216, 196, 0.10), transparent 60%), var(--ink); text-align: left; display: flex; flex-direction: column; transition: border-color 0.3s, transform 0.3s var(--ease); }
+.icard:hover { transform: translateY(-3px); border-color: #2c3d49; }
+.icard.sel { border-color: rgba(79, 216, 196, 0.5); }
+.icard strong { font-weight: 400; font-size: 19px; letter-spacing: -0.4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.icard small { color: var(--muted); font-size: 12.5px; margin-top: 3px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.icard .meta { margin-top: auto; display: flex; gap: 6px; flex-wrap: wrap; }
+.icard .run { position: absolute; top: 16px; right: 16px; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 12px var(--accent); }
+.ihead { display: flex; align-items: center; gap: 16px; }
+.back { width: 40px; height: 40px; border: 1px solid var(--line); border-radius: 50%; font-size: 18px; color: var(--muted); }
+.back:hover { border-color: var(--accent); color: var(--accent); }
+.ititle { flex: 1; min-width: 0; }
+.ititle h2 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ititle p { margin: 2px 0 0; color: var(--muted); }
+.tabs { display: flex; gap: 4px; margin: 22px 0 18px; border-bottom: 1px solid var(--line); }
+.tabs button { position: relative; padding: 10px 14px; color: var(--muted); transition: color 0.2s; }
+.tabs button:hover { color: var(--text); }
+.tabs button.on { color: var(--text); }
+.tabs button.on::after { content: ""; position: absolute; left: 10px; right: 10px; bottom: -1px; height: 2px; border-radius: 2px; background: var(--accent); }
+.tabs button.live::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 7px; border-radius: 50%; background: var(--accent); vertical-align: 1px; }
+.panel { display: none; padding-bottom: 40px; }
+.panel.on { display: block; animation: rise 0.35s var(--ease); }
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } }
+.hint { margin: 0 0 14px; color: var(--muted); }
+.sub { margin: 22px 0 10px; font-weight: 400; font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); }
+.rows .sub:first-child { margin-top: 0; }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.stats div { padding: 18px 20px; border: 1px solid var(--line); border-radius: 20px; background: var(--ink); }
+.stats span { display: block; font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); }
+.stats strong { font-weight: 400; font-size: 24px; letter-spacing: -0.6px; }
+.list.tall { max-height: none; }
+.row input { height: 36px; width: 280px; padding: 0 14px; border: 1px solid var(--line); border-radius: 18px; background: var(--ink); color: var(--text); font: inherit; }
+.row input:focus, .field input:focus { outline: none; border-color: var(--accent); }
+.logs { display: grid; grid-template-columns: 240px 1fr; gap: 14px; }
+.logs .list { max-height: calc(100vh - 310px); }
+.logs .row { cursor: pointer; min-height: 50px; }
+.logs .row.on { background: rgba(79, 216, 196, 0.08); }
+.viewer .loglines { height: calc(100vh - 362px); }
+.grow { flex: 1; }
+.overlay { position: fixed; inset: 0; z-index: 5; display: grid; place-items: center; background: rgba(12, 18, 23, 0.86); backdrop-filter: blur(14px); }
+.overlay[hidden] { display: none; }
+.wcard { display: grid; grid-template-columns: 220px 1fr; width: 780px; height: 500px; border: 1px solid var(--line); border-radius: 28px; background: var(--ink); overflow: hidden; }
+.rail { padding: 28px 18px; border-right: 1px solid var(--line); background: rgba(12, 18, 23, 0.5); }
+.rail button { display: block; width: 100%; padding: 10px 12px; margin-bottom: 4px; border-radius: 12px; text-align: left; color: var(--muted); }
+.rail button.on { background: var(--water); color: var(--text); }
+.rail button small { display: block; font-size: 11.5px; color: var(--muted); }
+.rail button:disabled { opacity: 0.4; }
+.wbody { display: flex; flex-direction: column; padding: 30px 32px 22px; min-height: 0; }
+.wsteps { flex: 1; overflow-y: auto; }
+.wstep h3 { margin: 0; font-size: 24px; font-weight: 400; letter-spacing: -0.5px; }
+.wstep p { margin: 6px 0 20px; color: var(--muted); }
+.wstep .list { max-height: 290px; }
+.wstep .row { cursor: pointer; }
+.wstep .row.on { background: rgba(79, 216, 196, 0.08); color: var(--accent); }
+.choice { display: flex; width: 100%; margin-bottom: 10px; padding: 16px 18px; border: 1px solid var(--line); border-radius: 16px; text-align: left; transition: border-color 0.2s; }
+.choice:not(:disabled):hover { border-color: var(--muted); }
+.choice.on { border-color: var(--accent); background: rgba(79, 216, 196, 0.06); }
+.choice:disabled { opacity: 0.4; }
+.choice small { display: block; margin-top: 2px; color: var(--muted); font-size: 12px; }
+.field { display: block; margin-bottom: 14px; color: var(--muted); font-size: 12px; }
+.field input { display: block; width: 100%; height: 42px; margin-top: 6px; padding: 0 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--deep); color: var(--text); font: inherit; font-size: 14px; }
+.wfoot { display: flex; align-items: center; gap: 10px; padding-top: 16px; border-top: 1px solid var(--line); }
+.wnote { flex: 1; margin: 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
+.link { color: var(--muted); font-size: 13px; padding: 0 8px; }
+.link:hover { color: var(--text); }
+
+#inst { display: flex; flex-direction: column; padding-bottom: 0; }
+#inst .tabs { margin-bottom: 0; }
+.panels { flex: 1; min-height: 0; overflow-y: auto; margin: 0 -56px; padding: 18px 56px 0; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+.logbar.stick { position: sticky; top: -18px; z-index: 2; margin: -18px -56px 12px; padding: 18px 56px 10px; background: var(--deep); }
+.logbar.stick.second { top: 50px; margin-top: 0; padding-top: 0; }
+/* smooth scrolling: no blur under moving content, and cards drawn only near the screen */
+.panels .list { backdrop-filter: none; }
+.card .banner { display: block; width: 100%; height: 110px; object-fit: cover; background: #0e151b; }
+
+/* a pack's own page, over the launcher */
+.dcard { position: relative; display: flex; flex-direction: column; width: min(860px, 92vw); height: min(640px, 88vh); border: 1px solid var(--line); border-radius: 28px; background: var(--ink); overflow: hidden; }
+.dclose { position: absolute; top: 18px; right: 18px; z-index: 1; font-size: 14px; }
+.dhead { display: flex; align-items: center; gap: 18px; padding: 26px 76px 18px 28px; border-bottom: 1px solid var(--line); }
+.dhead img { width: 72px; height: 72px; border-radius: 18px; object-fit: cover; background: #0e151b; }
+.dhead div { flex: 1; min-width: 0; }
+.dhead h3 { margin: 0; font-size: 24px; font-weight: 400; letter-spacing: -0.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dhead p { margin: 2px 0 0; color: var(--muted); }
+.dbody { flex: 1; overflow-y: auto; padding: 20px 28px; overscroll-behavior: contain; -webkit-user-select: text; user-select: text; }
+.shots { display: flex; gap: 10px; overflow-x: auto; margin-bottom: 18px; }
+.shots:empty { display: none; }
+.shots img { height: 150px; border-radius: 14px; flex: none; }
+.desc { color: #c9d4db; line-height: 1.6; overflow-wrap: anywhere; }
+.desc img { max-width: 100%; height: auto; border-radius: 10px; }
+.desc a { color: var(--accent); }
+.desc h1, .desc h2, .desc h3, .desc h4 { font-weight: 400; color: var(--text); margin: 18px 0 6px; font-size: 18px; }
+.dfoot { display: flex; align-items: center; justify-content: space-between; padding: 14px 28px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
+/* skeletons: grey shapes that shimmer where content is about to be */
+.sk { border-radius: 8px; background: linear-gradient(90deg, #17212a 0%, #1f2c36 50%, #17212a 100%) 0 0 / 200% 100%; animation: shimmer 1.2s linear infinite; }
+@keyframes shimmer { to { background-position: -200% 0; } }
+.card.skel { pointer-events: none; }
+.card.skel .banner { height: 110px; border-radius: 0; }
+.card.skel .line { height: 12px; margin-top: 10px; }
+.card.skel .line:last-child { width: 40%; }
+.shot-sk { width: 260px; height: 150px; flex: none; border-radius: 14px; }
+.desc .line { height: 13px; margin-bottom: 12px; }
+.desc .line:nth-child(3n) { width: 70%; }
+
+.prow { padding-top: 10px; padding-bottom: 10px; }
+.prow > .picon { flex: none; width: 72px; height: 72px; border-radius: 16px; object-fit: cover; image-rendering: pixelated; background: #0e151b; }
+.prow > .picon.blank { display: grid; place-items: center; color: var(--muted); }
+.prow > div { flex: 1; min-width: 0; }
+.ptags { display: flex; gap: 8px; align-items: center; font-size: 11.5px; }
+.tag.plain { background: var(--line); color: var(--muted); }
+/* the author's headings, without the launcher's big title styles */
+.desc h1, .desc h2, .desc h3, .desc h4 { letter-spacing: normal; line-height: 1.35; }
+/* instance settings: room between sections, rows that breathe, a clear choice */
+#tab-isettings .rows { max-width: 760px; }
+#tab-isettings h3.sub { margin: 30px 0 10px; }
+#tab-isettings h3.sub:first-child { margin-top: 4px; }
+#tab-isettings .row { padding: 14px 14px 14px 22px; gap: 24px; }
+#tab-isettings .row small { margin-top: 2px; line-height: 1.45; max-width: 420px; }
+/* a segmented choice: the pill slides to the picked one */
+.seg { position: relative; }
+.seg > i { position: absolute; top: 4px; left: 0; height: calc(100% - 8px); border-radius: 10px; background: var(--accent); transition: transform 0.4s var(--ease), width 0.4s var(--ease); pointer-events: none; }
+.seg button { position: relative; z-index: 1; transition: color 0.25s; }
+.seg button.on { background: none; color: var(--deep); }
+/* working: three dots that hop in turn */
+.dots { display: inline-flex; gap: 3px; align-items: center; height: 1em; }
+.dots b { width: 5px; height: 5px; border-radius: 50%; background: currentColor; animation: hop 0.9s ease-in-out infinite; }
+.dots b:nth-child(2) { animation-delay: 0.15s; }
+.dots b:nth-child(3) { animation-delay: 0.3s; }
+@keyframes hop { 0%, 60%, 100% { transform: translateY(0); opacity: 0.5; } 30% { transform: translateY(-4px); opacity: 1; } }
+.seg button:disabled { opacity: 0.4; }
+.seg button.on:disabled { opacity: 1; }
+.row select:disabled { opacity: 0.6; cursor: default; }
+#is-delete { border-color: rgba(229, 112, 122, 0.5); color: #E5707A; }
 </style>
 </head>
 <body>
@@ -171,10 +316,8 @@ talaz
 <nav aria-label="Pages">
 <i></i>
 <button data-page="home" aria-current="page">Home</button>
-<button data-page="mods">Mods</button>
-<button data-page="packs">Packs</button>
+<button data-page="instances">Instances</button>
 <button data-page="versions">Versions</button>
-<button data-page="log">Log</button>
 <button data-page="settings">Settings</button>
 </nav>
 <button id="chip"></button>
@@ -186,36 +329,111 @@ talaz
 <h1>Minecraft</h1>
 <div class="go">
 <div class="pick">
-<label for="version">Version</label>
-<select id="version"></select>
+<label for="instance">Instance</label>
+<select id="instance"></select>
 <svg aria-hidden="true" width="12" height="8" viewBox="0 0 12 8" fill="none" stroke="#9AA9B5" stroke-width="1.8" stroke-linecap="round"><path d="M1 1.5l5 5 5-5"/></svg>
 </div>
 <button id="play">Play</button>
 </div>
 <div class="facts">
-<button data-page="mods"><span>Mods</span><strong id="fact-mods"></strong></button>
-<button data-page="settings"><span>Window</span><strong id="fact-size"></strong></button>
-<button data-page="versions"><span>Installed</span><strong id="fact-versions"></strong></button>
+<button data-open="overview"><span>Version</span><strong id="fact-version"></strong></button>
+<button data-open="mods"><span>Mods</span><strong id="fact-mods"></strong></button>
+<button data-open="worlds"><span>Played</span><strong id="fact-played"></strong></button>
 </div>
 </section>
 
-<section class="page" id="mods">
-<h2>Mods</h2>
-<p>Pick what the game starts with. Right click a mod to change its setting. Everything else is in the game, behind Right Shift.</p>
-<input id="find" type="search" placeholder="Search mods" aria-label="Search mods">
-<div class="tiles" id="tiles"></div>
+<section class="page" id="instances">
+<div class="titlebar"><div><h2>Instances</h2><p>Each one has its own version, mods, packs and logs.</p></div><button class="btn solid" id="inst-new">New instance</button></div>
+<div class="icards" id="inst-cards"></div>
 </section>
 
-<section class="page" id="packs">
-<h2>Resource Packs</h2>
-<p>Packs that are on load in every world, the top one over the others. Drop a .mcpack on the window to add it.</p>
-<div class="logbar"><div class="seg" role="tablist"><button class="on" data-packs="mine">Installed</button><button data-packs="browse">Browse</button></div><span></span><button class="btn" id="pack-add">Add a pack</button></div>
-<div class="list" id="pack-list"></div>
+<section class="page" id="inst">
+<div class="ihead">
+<button class="back" id="inst-back" aria-label="Back to instances">←</button>
+<div class="ititle"><h2 id="inst-name"></h2><p id="inst-meta"></p></div>
+<button class="btn solid big" id="inst-play">Play</button>
+</div>
+<div class="tabs" role="tablist" id="inst-tabs">
+<button data-tab="overview" class="on">Overview</button><button data-tab="mods">Mods</button><button data-tab="textures">Textures</button><button data-tab="worlds">Worlds</button><button data-tab="logs">Logs</button><button data-tab="live">Live Log</button><button data-tab="isettings">Settings</button>
+</div>
+
+<div class="panels" id="panels">
+<div class="panel on" id="tab-overview">
+<div class="stats"><div><span>Played</span><strong id="ov-total"></strong></div><div><span>Sessions</span><strong id="ov-count"></strong></div><div><span>Last played</span><strong id="ov-last"></strong></div></div>
+<h3 class="sub">Play history</h3>
+<div class="list" id="ov-sessions"></div>
+</div>
+
+<div class="panel" id="tab-mods">
+<p class="hint" id="mods-hint">Pick what the game starts with. Right click a mod to change its setting. Everything else is in the game, behind Right Shift.</p>
+<input id="find" type="search" placeholder="Search mods" aria-label="Search mods">
+<div class="tiles" id="tiles"></div>
+</div>
+
+<div class="panel" id="tab-textures">
+<div class="logbar stick"><div class="seg" role="tablist"><button class="on" data-packs="mine">Installed</button><button data-packs="browse">Browse</button></div><span class="grow"></span><button class="btn" id="pack-add">Add a pack</button></div>
+<p class="hint" id="packs-hint">Packs that are on load in every world, the top one over the others. Drop a .mcpack on the window to add it.</p>
+<div id="mine">
+<div class="logbar"><input id="pk-find" type="search" placeholder="Search installed packs" aria-label="Search installed packs"><div class="seg" id="pk-src"><button class="on" data-src="all">All</button><button data-src="online">Online</button><button data-src="local">Local</button></div><select id="pk-show" aria-label="Show"><option value="all">All packs</option><option value="on">On only</option><option value="off">Off only</option></select><select id="pk-sort" aria-label="Sort by"><option value="name">Name (A-Z)</option><option value="name-desc">Name (Z-A)</option><option value="added">Recently added</option><option value="size">Size (largest)</option></select></div>
+<div class="list tall" id="pack-list"></div>
+</div>
 <div id="browse" hidden>
-<div class="logbar"><input id="cf-find" type="search" placeholder="Search CurseForge" aria-label="Search CurseForge"><select id="cf-sort" aria-label="Sort"><option value="popular">Popular</option><option value="downloads">Most downloads</option><option value="updated">Recently updated</option><option value="name">Name</option></select></div>
+<div class="logbar stick second"><input id="cf-find" type="search" placeholder="Search CurseForge" aria-label="Search CurseForge"><select id="cf-sort" aria-label="Sort"><option value="popular">Popular</option><option value="downloads">Most downloads</option><option value="updated">Recently updated</option><option value="name">Name</option></select></div>
 <div class="cards" id="cf-cards"></div>
 <button class="btn" id="cf-more" hidden>Load more</button>
 <p class="fine">From CurseForge. Downloads count on the author's page.</p>
+</div>
+</div>
+
+<div class="panel" id="tab-worlds">
+<p class="hint" id="worlds-hint"></p>
+<div class="list" id="world-list"></div>
+</div>
+
+<div class="panel" id="tab-logs">
+<div class="logs">
+<div class="list" id="log-files"></div>
+<div class="viewer">
+<div class="logbar"><input id="lf-find" type="search" placeholder="Search this log" aria-label="Search this log"><div class="seg" id="lf-level"><button class="on" data-level="all">All</button><button data-level="warn">Warnings</button><button data-level="error">Errors</button></div><button class="btn" id="lf-copy">Copy</button><button class="btn" id="lf-delete">Delete</button></div>
+<pre id="lf-lines" class="loglines" tabindex="0"></pre>
+</div>
+</div>
+</div>
+
+<div class="panel" id="tab-live">
+<p class="hint" id="log-state">This instance is not running.</p>
+<div class="logbar"><input id="log-find" type="search" placeholder="Filter" aria-label="Filter the log"><button class="btn" id="log-copy">Copy</button></div>
+<pre id="log-lines" class="loglines" tabindex="0"></pre>
+</div>
+
+<div class="panel" id="tab-isettings">
+<div class="rows">
+<h3 class="sub">Instance</h3>
+<div class="list">
+<div class="row"><div>Name</div><input id="is-name" maxlength="32" aria-label="Name"></div>
+<div class="row"><div>Description</div><input id="is-desc" maxlength="120" placeholder="What is this instance for?" aria-label="Description"></div>
+</div>
+<h3 class="sub">Game</h3>
+<div class="list">
+<div class="row"><div>Version<small id="is-version-note">The Minecraft version this instance starts</small></div><select id="is-version" aria-label="Version"></select></div>
+<div class="row"><div>Resolution<small>The game window in pixels</small></div><select id="is-size" aria-label="Resolution"></select></div>
+<div class="row"><div>Faster graphics<small>Turns off vsync and fancy effects, and sets the view to 10 chunks. Close the game first</small></div><button class="btn" id="faster">Apply</button></div>
+</div>
+<h3 class="sub">Content</h3>
+<div class="list">
+<div class="row"><div>Mods<small id="is-kind-note"></small></div><div class="seg" id="is-kind"><button data-kind="talaz">Talaz</button><button data-kind="vanilla">Vanilla</button></div></div>
+</div>
+<h3 class="sub">Game directory</h3>
+<div class="list">
+<div class="row"><div>Folder<small id="is-dir-note"></small></div><div class="seg" id="is-dir"><button data-dir="shared">Shared</button><button data-dir="own">Dedicated</button></div></div>
+<div class="row"><div>Open the folder<small>Worlds, resource packs and settings</small></div><button class="btn" id="folder">Open</button></div>
+</div>
+<h3 class="sub">Danger zone</h3>
+<div class="list">
+<div class="row" id="is-delete-row"><div>Delete instance<small id="is-delete-note"></small></div><button class="btn" id="is-delete">Delete</button></div>
+</div>
+</div>
+</div>
 </div>
 </section>
 
@@ -228,27 +446,53 @@ talaz
 </div>
 </section>
 
-<section class="page" id="log">
-<h2>Log</h2>
-<p id="log-state">What the game prints while it runs. It starts over with every game.</p>
-<div class="logbar"><input id="log-find" type="search" placeholder="Filter" aria-label="Filter the log"><button class="btn" id="log-copy">Copy</button></div>
-<pre id="log-lines" tabindex="0"></pre>
-</section>
-
 <section class="page" id="settings">
 <h2>Settings</h2>
-<p>The launcher's own. The rest of the game's settings stay in the game.</p>
+<p>The launcher's own. Each instance has its own settings too.</p>
 <div class="rows">
 <div class="list">
-<div class="row" id="row-size"><div>Game window<small>The size the game opens at</small></div><select id="size" aria-label="Game window size"></select></div>
-<div class="row"><div>Faster graphics<small>Turns off vsync, fancy skies, smooth lighting, fancy leaves and clouds, and shortens the view to 10 chunks. Close the game first</small></div><button class="btn" id="faster">Apply</button></div>
+<div class="row" id="row-size"><div>Game window<small>The size instances open at unless they pick their own</small></div><select id="size" aria-label="Game window size"></select></div>
 <div class="row" id="row-google"><div>Google Play<small id="who"></small></div><button class="btn" id="sign"></button></div>
-<div class="row"><div>Game folder<small>Worlds, resource packs and screenshots</small></div><button class="btn" id="folder">Open</button></div>
 </div>
 <p class="fine">Talaz 0.1.0 by Danuvia. Not affiliated with Mojang or Microsoft.</p>
 </div>
 </section>
 
+<section id="detail" class="overlay" hidden aria-label="Pack details">
+<div class="dcard">
+<button class="back dclose" id="d-close" aria-label="Close">✕</button>
+<div class="dhead"><img id="d-logo" alt=""><div><h3 id="d-name"></h3><p id="d-by"></p></div><button class="btn solid big" id="d-get">Install</button></div>
+<div class="dbody">
+<div class="shots" id="d-shots"></div>
+<div class="desc" id="d-desc"></div>
+</div>
+<div class="dfoot"><span id="d-facts"></span><button class="link" id="d-page">Open on CurseForge</button></div>
+</div>
+</section>
+
+<section id="wizard" class="overlay" hidden aria-label="New instance">
+<div class="wcard">
+<aside class="rail" id="w-rail"></aside>
+<div class="wbody">
+<div class="wsteps">
+<div class="wstep" data-w="type"><h3>Choose a type</h3><p>Two ways to start. Everything can be changed later.</p>
+<button class="choice" data-type="talaz"><span>Talaz<small>The game with Talaz's mods, menu and title screen</small></span></button>
+<button class="choice" data-type="vanilla"><span>Vanilla<small>The game as it comes, without any mods</small></span></button>
+</div>
+<div class="wstep" data-w="version" hidden><h3>Choose a version</h3><p>The versions you have downloaded. Get more on the Versions page.</p><div class="list" id="w-versions"></div></div>
+<div class="wstep" data-w="folder" hidden><h3>Choose a game folder</h3><p>Where this instance keeps its worlds, settings and packs.</p>
+<button class="choice" data-folder="own"><span>Dedicated<small>A folder of its own, with its own worlds</small></span></button>
+<button class="choice" data-folder="shared"><span>Shared<small>The same worlds and packs as your other shared instances</small></span></button>
+</div>
+<div class="wstep" data-w="name" hidden><h3>Name the instance</h3><p>Everything here can be changed afterwards.</p>
+<label class="field">Name<input id="w-name" maxlength="32"></label>
+<label class="field">Description<input id="w-desc" maxlength="120" placeholder="What is this instance for?"></label>
+</div>
+</div>
+<div class="wfoot"><p class="wnote" id="w-note"></p><button class="link" id="w-cancel">Cancel</button><button class="btn" id="w-back">Back</button><button class="btn solid" id="w-next">Next</button></div>
+</div>
+</div>
+</section>
 
 <section id="setup" hidden aria-label="Setup">
 <div class="card">
@@ -293,20 +537,50 @@ const $ = (id) => document.getElementById(id);
 const el = (tag, props, ...children) => { const node = Object.assign(document.createElement(tag), props); node.append(...children); return node; };
 const SIZES = ['1280x720', '1600x900', '1920x1080', '2560x1440'];
 let state = { versions: [], email: null, mods: [] }, available = null, notes = {}, busy = false, waiting = null;
+let insts = { selected: 'default', list: [] };
+const current = () => insts.list.find((i) => i.id === insts.selected);
 // a version's line from the wiki, cut to two lines on screen and whole on hover
 const note = (name) => (notes[name] ? [el('small', { className: 'note', title: notes[name] }, notes[name])] : []);
+// the first press asks, the second does it
+const sure = (button, ask, act) => () => {
+  if (!button.classList.contains('sure')) { button.classList.add('sure'); button.dataset.was = button.textContent; button.textContent = ask; setTimeout(() => { button.classList.remove('sure'); button.textContent = button.dataset.was; }, 4000); return; }
+  act();
+};
+const ago = (secs) => {
+  if (!secs) return 'Never';
+  const d = Date.now() / 1000 - secs;
+  if (d < 60) return 'Just now';
+  if (d < 3600) return `${Math.round(d / 60)} min ago`;
+  if (d < 86400) return `${Math.round(d / 3600)} h ago`;
+  if (d < 86400 * 30) return `${Math.round(d / 86400)} days ago`;
+  return new Date(secs * 1000).toLocaleDateString();
+};
+const hours = (secs) => secs < 60 ? `${secs} s` : secs < 3600 ? `${Math.round(secs / 60)} min` : `${(secs / 3600).toFixed(1)} h`;
+const bytes = (n) => n >= 1 << 30 ? `${(n / (1 << 30)).toFixed(1)} GB` : n >= 1 << 20 ? `${(n / (1 << 20)).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
+const played = (inst) => (inst?.sessions ?? []).reduce((sum, [, secs]) => sum + secs, 0);
+const lastPlayed = (inst) => inst?.sessions?.at(-1)?.[0] ?? 0;
+const installedNames = () => state.versions.map(([name]) => name);
 
-// pages
+// pages: the instance page belongs under Instances in the bar
 const thumb = document.querySelector('nav i');
+let inInstance = false;
 function show(page) {
+  if (page === 'instances' && inInstance) page = 'inst';
+  const tabName = page === 'inst' ? 'instances' : page;
   for (const tab of document.querySelectorAll('nav button')) {
-    const on = tab.dataset.page === page;
+    const on = tab.dataset.page === tabName;
     tab.toggleAttribute('aria-current', on);
     if (on) { thumb.style.width = `${tab.offsetWidth}px`; thumb.style.transform = `translateX(${tab.offsetLeft}px)`; }
   }
   for (const section of document.querySelectorAll('.page')) section.classList.toggle('on', section.id === page);
+  document.body.dataset.page = page;
 }
-document.addEventListener('click', (event) => { const page = event.target.closest('[data-page]')?.dataset.page; if (page) show(page); });
+document.addEventListener('click', (event) => {
+  const page = event.target.closest('[data-page]')?.dataset.page;
+  if (page) show(page);
+  const tab = event.target.closest('[data-open]')?.dataset.open;
+  if (tab) openInstance(insts.selected, tab);
+});
 
 // the message at the bottom: stays while something runs, leaves by itself otherwise
 let leaving;
@@ -322,11 +596,7 @@ function say(text, part) {
 }
 listen('progress', ({ payload: [text, part] }) => say(part == null ? text : `${text} · ${Math.round(part * 100)}%`, part));
 
-function working(on) {
-  busy = on;
-  draw();
-}
-
+function working(on) { busy = on; draw(); }
 async function run(text, job) {
   working(true);
   try { await job(); if (text) say(text); } catch (err) { say(String(err)); }
@@ -338,8 +608,6 @@ function draw() {
   // Windows: no Google, no downloads, no window size, one installed game
   document.querySelector('[data-page="versions"]').hidden = state.windows;
   $('row-google').hidden = $('row-size').hidden = state.windows;
-  document.querySelector('#home [data-page="versions"]').hidden = state.windows;
-  // header chip and the account row
   $('chip').hidden = state.windows;
   $('chip').replaceChildren(el('b', {}, state.email ? state.email[0] : '?'), el('span', {}, state.email ?? 'Sign in'));
   $('chip').dataset.page = 'settings';
@@ -347,22 +615,41 @@ function draw() {
   $('sign').textContent = state.email ? 'Sign out' : 'Sign in';
   $('sign').disabled = busy;
 
+  const inst = current(), names = installedNames();
   // home
-  const names = state.versions.map(([name]) => name), version = $('version');
-  // the one known to run well, until the player picks another
-  const want = localStorage.getItem('version') ?? (names.includes(available?.recommended) ? available.recommended : version.value);
-  version.replaceChildren(...names.map((name) => new Option(name, name)));
-  if (names.includes(want)) version.value = want;
-  version.disabled = busy || !names.length;
+  $('instance').replaceChildren(...insts.list.map((i) => new Option(i.name, i.id)));
+  $('instance').value = insts.selected;
+  $('instance').disabled = busy || state.running;
   warn();
-  $('play').textContent = state.running ? 'Running' : names.length ? 'Play' : state.windows ? 'Install Minecraft' : 'Get the game';
-  $('play').disabled = busy || state.running;
+  for (const button of [$('play'), $('inst-play')]) {
+    button.textContent = state.running ? 'Stop game' : names.length ? 'Play' : state.windows ? 'Install Minecraft' : 'Get the game';
+    button.disabled = busy;
+    button.classList.toggle('sure', !!state.running);
+  }
   const on = state.mods.filter((mod) => mod.on).length;
-  $('fact-mods').textContent = on ? `${on} on` : 'All off';
-  $('fact-size').textContent = $('size').value.replace('x', ' × ');
-  $('fact-versions').textContent = names.length ? `${names.length} version${names.length > 1 ? 's' : ''}` : 'Nothing yet';
+  $('fact-version').textContent = state.windows ? 'Windows' : versionOf(inst) || 'Pick one';
+  $('fact-mods').textContent = inst?.vanilla ? 'Vanilla' : on ? `${on} on` : 'All off';
+  $('fact-played').textContent = hours(played(inst));
 
-  // mods: made once, then only switched, so the water moves instead of jumping
+  drawInstances();
+  drawInstance();
+  drawMods();
+  drawVersions();
+}
+
+// the version an instance starts: its own, or the recommended one while it has none
+function versionOf(inst) {
+  const names = installedNames();
+  if (inst?.version && names.includes(inst.version)) return inst.version;
+  if (names.includes(available?.recommended)) return available.recommended;
+  return names[0] ?? '';
+}
+
+function drawMods() {
+  const inst = current();
+  $('mods-hint').textContent = inst?.vanilla ? 'This instance is vanilla, so it starts without mods. Make a Talaz instance to use them.' : 'Pick what the game starts with. Right click a mod to change its setting. Everything else is in the game, behind Right Shift.';
+  $('tiles').hidden = $('find').hidden = !!inst?.vanilla;
+  // made once, then only switched, so the water moves instead of jumping
   if (!$('tiles').children.length) {
     for (const { id, name, note } of state.mods) {
       const tile = el('button', { className: 'tile', role: 'switch', id: `mod-${id}` }, el('strong', {}, name), el('small', {}, note), el('em'), water());
@@ -392,16 +679,15 @@ function draw() {
     tile.setAttribute('aria-checked', mod.on);
     tile.querySelector('em').textContent = (mod.on ? 'On' : 'Off') + (mod.option ? ` · ${mod.option.value}${mod.option.unit}` : '');
   }
+}
 
-  // versions
+function drawVersions() {
+  const names = installedNames();
   $('installed').replaceChildren(...state.versions.map(([name, own]) => {
     const remove = el('button', { className: 'btn', textContent: 'Delete', disabled: busy });
-    // the first press asks, the second deletes
-    remove.onclick = () => {
-      if (!remove.classList.contains('sure')) { remove.classList.add('sure'); remove.textContent = 'Delete it?'; return; }
-      run(`Minecraft ${name} was deleted`, () => invoke('remove', { version: name }));
-    };
-    return el('div', { className: 'row' }, el('div', {}, name, el('small', {}, own ? 'Downloaded by Talaz' : 'From Minecraft Bedrock Launcher'), ...note(name)), ...(own ? [remove] : []));
+    remove.onclick = sure(remove, 'Delete it?', () => run(`Minecraft ${name} was deleted`, () => invoke('remove', { version: name })));
+    const using = insts.list.filter((i) => i.version === name).map((i) => i.name);
+    return el('div', { className: 'row' }, el('div', {}, name, el('small', {}, (own ? 'Downloaded by Talaz' : 'From Minecraft Bedrock Launcher') + (using.length ? ` · Used by ${using.join(', ')}` : '')), ...note(name)), ...(own ? [remove] : []));
   }));
   if (!names.length) $('installed').replaceChildren(el('div', { className: 'row muted' }, 'Nothing here yet'));
   if (available) {
@@ -415,22 +701,230 @@ function draw() {
   }
 }
 
-// resource packs: read from the game's folder whenever the page opens or changes
+// --- instances ---
+
+function tagsOf(inst) {
+  return [state.windows ? 'Windows' : versionOf(inst) || 'No version', inst.vanilla ? 'Vanilla' : 'Talaz', inst.shared ? 'Shared folder' : 'Own folder'];
+}
+function drawInstances() {
+  $('inst-cards').replaceChildren(...insts.list.map((inst) => {
+    const card = el('button', { className: 'icard' + (inst.id === insts.selected ? ' sel' : '') },
+      el('strong', {}, inst.name),
+      el('small', {}, inst.description || `Last played ${ago(lastPlayed(inst)).toLowerCase()}`),
+      el('div', { className: 'meta' }, ...tagsOf(inst).map((t) => el('span', { className: 'tag' }, t))));
+    if (state.running && inst.id === insts.selected) card.append(el('i', { className: 'run', title: 'Running' }));
+    card.onclick = () => openInstance(inst.id);
+    return card;
+  }));
+}
+
+// opening an instance selects it, so its mods, packs and folder are the ones shown
+// each instance remembers the tab it was left on, so coming back lands there
+let tab = 'overview';
+const lastTab = {};
+async function openInstance(id, to) {
+  if (id !== insts.selected) {
+    try { await invoke('select_instance', { id }); } catch (err) { return say(String(err)); }
+    await refresh();
+  }
+  inInstance = true;
+  show('inst');
+  pickTab(to ?? lastTab[id] ?? 'overview');
+}
+function pickTab(name) {
+  tab = name;
+  lastTab[insts.selected] = name;
+  for (const b of $('inst-tabs').children) b.classList.toggle('on', b.dataset.tab === name);
+  for (const p of document.querySelectorAll('.panel')) p.classList.toggle('on', p.id === `tab-${name}`);
+  if (name === 'textures') drawPacks();
+  if (name === 'worlds') drawWorlds();
+  if (name === 'logs') drawLogs();
+  if (name === 'live') $('log-lines').scrollTop = $('log-lines').scrollHeight;
+}
+for (const b of $('inst-tabs').children) b.onclick = () => pickTab(b.dataset.tab);
+$('inst-back').onclick = () => { inInstance = false; show('instances'); };
+
+function drawInstance() {
+  const inst = current();
+  if (!inst) return;
+  $('inst-name').textContent = inst.name;
+  $('inst-meta').textContent = tagsOf(inst).join(' · ') + (inst.description ? ` · ${inst.description}` : '');
+  document.querySelector('[data-tab="live"]').classList.toggle('live', !!state.running);
+  // overview
+  $('ov-total').textContent = hours(played(inst));
+  $('ov-count').textContent = String(inst.sessions.length);
+  $('ov-last').textContent = ago(lastPlayed(inst));
+  $('ov-sessions').replaceChildren(...inst.sessions.slice().reverse().map(([start, secs]) =>
+    el('div', { className: 'row' }, el('div', {}, new Date(start * 1000).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })), el('span', { className: 'muted' }, hours(secs)))));
+  if (!inst.sessions.length) $('ov-sessions').replaceChildren(el('div', { className: 'row muted' }, 'No sessions yet. Play it and come back!'));
+  // settings, unless one is being typed into
+  if (document.activeElement !== $('is-name')) $('is-name').value = inst.name;
+  if (document.activeElement !== $('is-desc')) $('is-desc').value = inst.description;
+  const names = installedNames();
+  $('is-version').replaceChildren(...names.map((n) => new Option(n, n)));
+  $('is-version').value = versionOf(inst);
+  // fixed once the instance is made, like the mods choice below
+  $('is-version').disabled = !!inst.version;
+  $('is-version-note').textContent = inst.version ? 'Set when the instance was made. Make a new instance for another version' : 'Pick the version this instance starts';
+  $('is-size').replaceChildren(new Option(`Launcher default (${$('size').value.replace('x', ' × ')})`, ''), ...SIZES.map((sz) => new Option(sz.replace('x', ' × '), sz)));
+  $('is-size').value = inst.width ? `${inst.width}x${inst.height}` : '';
+  for (const b of $('is-kind').children) { b.classList.toggle('on', (b.dataset.kind === 'vanilla') === inst.vanilla); b.disabled = true; }
+  $('is-kind-note').textContent = (inst.vanilla ? 'Starts the game as it comes' : "Starts with Talaz's mods, menu and title screen") + '. Set when the instance was made';
+  for (const b of $('is-dir').children) { b.classList.toggle('on', (b.dataset.dir === 'shared') === inst.shared); b.disabled = inst.id === 'default' || inst.vanilla; }
+  $('is-dir-note').textContent = inst.id === 'default' ? 'The default instance is the shared folder' : inst.vanilla ? 'Vanilla instances always keep their own folder' : inst.shared ? 'Worlds and packs are the same as in your other shared instances' : 'A folder of its own, with its own worlds';
+  $('is-delete-row').hidden = inst.id === 'default';
+  $('is-delete-note').textContent = inst.shared ? 'Takes it off the list. The shared folder and its worlds stay' : 'Takes it off the list and moves its folder, worlds included, to the trash';
+}
+
+async function saveInstance(change) {
+  const inst = current(), [w, h] = ($('is-size').value || '0x0').split('x').map(Number);
+  const edit = { id: inst.id, name: $('is-name').value, description: $('is-desc').value, version: $('is-version').value, vanilla: inst.vanilla, shared: inst.shared, width: w, height: h, ...change };
+  try { await invoke('update_instance', { edit }); } catch (err) { say(String(err)); }
+  await refresh();
+}
+$('is-name').onchange = $('is-desc').onchange = $('is-version').onchange = $('is-size').onchange = () => saveInstance({});
+for (const b of $('is-dir').children) b.onclick = () => saveInstance({ shared: b.dataset.dir === 'shared' });
+$('is-delete').onclick = sure($('is-delete'), 'Delete it?', async () => {
+  inInstance = false;
+  const inst = current();
+  try { await invoke('delete_instance', { id: inst.id, files: !inst.shared }); say(`${inst.name} was deleted`); } catch (err) { return say(String(err)); }
+  await refresh();
+  show('instances');
+});
+$('faster').onclick = () => invoke('faster_graphics').then(() => say('This instance will start with faster graphics'), (err) => say(String(err)));
+$('folder').onclick = () => invoke('open_game_folder').catch((err) => say(String(err)));
+$('instance').onchange = async () => {
+  inInstance = false;
+  try { await invoke('select_instance', { id: $('instance').value }); } catch (err) { say(String(err)); }
+  refresh();
+};
+
+// worlds
+async function drawWorlds() {
+  const worlds = await invoke('worlds').catch((err) => { say(String(err)); return []; });
+  $('worlds-hint').textContent = current()?.shared ? 'This instance uses the shared folder, so these worlds also show up in your other shared instances.' : 'Worlds show up here once you create one in the game.';
+  $('world-list').replaceChildren(...worlds.map((w) => {
+    const open = el('button', { className: 'btn', textContent: 'Open folder' });
+    open.onclick = () => invoke('open_world', { folder: w.folder }).catch((err) => say(String(err)));
+    const del = el('button', { className: 'btn', textContent: 'Delete' });
+    del.onclick = sure(del, 'Move to trash?', () => invoke('delete_world', { folder: w.folder }).then(() => { say(`${w.name} was moved to the trash`); drawWorlds(); }, (err) => say(String(err))));
+    return el('div', { className: 'row' }, el('div', {}, w.name, el('small', {}, `Last played ${ago(w.last_played).toLowerCase()} · ${bytes(w.size)}`)), open, del);
+  }));
+  if (!worlds.length) $('world-list').replaceChildren(el('div', { className: 'row muted' }, 'No worlds yet.'));
+}
+
+// logs: past games' logs of this instance, searchable and filtered by level
+let logFile = null, logText = '';
+async function drawLogs() {
+  const files = await invoke('logs').catch(() => []);
+  if (!files.some((f) => f.name === logFile)) logFile = files[0]?.name ?? null;
+  $('log-files').replaceChildren(...files.map((f) => {
+    const row = el('div', { className: 'row' + (f.name === logFile ? ' on' : '') }, el('div', {}, f.name === 'latest.log' ? (state.running ? 'Running game' : 'Last game') : new Date(f.modified * 1000).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }), el('small', {}, bytes(f.size))));
+    row.onclick = () => { logFile = f.name; drawLogs(); };
+    return row;
+  }));
+  if (!files.length) $('log-files').replaceChildren(el('div', { className: 'row muted' }, 'No logs yet'));
+  logText = logFile ? await invoke('read_log', { name: logFile }).catch(() => '') : '';
+  drawLogText();
+}
+function drawLogText() {
+  const find = $('lf-find').value.toLowerCase(), level = document.querySelector('#lf-level .on').dataset.level;
+  const lines = logText.split('\n').filter((l) => (!find || l.toLowerCase().includes(find)) && (level === 'all' || (level === 'error' ? /error|fatal|exception|signal/i.test(l) : /warn|error|fatal|exception/i.test(l))));
+  $('lf-lines').replaceChildren(...lines.slice(-5000).map((l) => el('div', { className: /error|fatal|signal|exception/i.test(l) ? 'err' : '' }, l)));
+  if (!logFile) $('lf-lines').textContent = 'Logs show up here once the instance has run.';
+}
+$('lf-find').oninput = drawLogText;
+for (const b of $('lf-level').children) b.onclick = () => { for (const x of $('lf-level').children) x.classList.toggle('on', x === b); drawLogText(); };
+$('lf-copy').onclick = () => navigator.clipboard.writeText([...$('lf-lines').children].map((d) => d.textContent).join('\n')).then(() => say('Log copied'), (err) => say(String(err)));
+$('lf-delete').onclick = sure($('lf-delete'), 'Delete it?', () => logFile && invoke('delete_log', { name: logFile }).then(() => { logFile = null; drawLogs(); }, (err) => say(String(err))));
+
+// wizard: type, version, folder, name, like OneClient's New instance
+const W = ['type', 'version', 'folder', 'name'];
+let wiz = null;
+function openWizard() {
+  wiz = { step: 0, type: 'talaz', version: versionOf(null), folder: 'own', name: '', desc: '' };
+  $('w-name').value = $('w-desc').value = '';
+  $('wizard').hidden = false;
+  drawWizard();
+}
+function drawWizard() {
+  const labels = { type: ['Type', wiz.type === 'vanilla' ? 'Vanilla' : 'Talaz'], version: ['Version', wiz.version || 'Not chosen'], folder: ['Game folder', wiz.type === 'vanilla' || wiz.folder === 'own' ? 'Dedicated' : 'Shared'], name: ['Name', wiz.name || 'Not named'] };
+  $('w-rail').replaceChildren(...W.map((k, i) => {
+    const b = el('button', { className: i === wiz.step ? 'on' : '', disabled: i > wiz.step && !wiz.version }, labels[k][0], el('small', {}, labels[k][1]));
+    b.onclick = () => { wiz.step = i; drawWizard(); };
+    return b;
+  }));
+  for (const s of document.querySelectorAll('.wstep')) s.hidden = s.dataset.w !== W[wiz.step];
+  for (const c of document.querySelectorAll('[data-type]')) c.classList.toggle('on', c.dataset.type === wiz.type);
+  for (const c of document.querySelectorAll('[data-folder]')) { c.classList.toggle('on', c.dataset.folder === (wiz.type === 'vanilla' ? 'own' : wiz.folder)); c.disabled = wiz.type === 'vanilla' && c.dataset.folder === 'shared'; }
+  $('w-versions').replaceChildren(...installedNames().map((n) => {
+    const row = el('div', { className: 'row' + (n === wiz.version ? ' on' : '') }, el('div', {}, n, ...note(n)), ...(n === available?.recommended ? [el('span', { className: 'tag' }, 'Recommended')] : []));
+    row.onclick = () => { wiz.version = n; drawWizard(); };
+    return row;
+  }));
+  if (!installedNames().length) $('w-versions').replaceChildren(el('div', { className: 'row muted' }, 'No versions yet. Download one on the Versions page first.'));
+  const notesFor = {
+    type: wiz.type === 'vanilla' ? 'Keeps its own game folder, worlds and packs.' : 'Mods can be turned on and off per instance afterwards.',
+    version: wiz.version ? `${wiz.version} is what this instance starts.` : 'Pick a version to continue.',
+    folder: wiz.type === 'vanilla' ? 'Vanilla instances always run in their own folder.' : wiz.folder === 'own' ? 'Its own worlds and packs. Switch this later in the instance settings.' : 'Only one instance can run at a time, so sharing is safe.',
+    name: 'The instance is made on this computer. Nothing is uploaded.',
+  };
+  $('w-note').textContent = notesFor[W[wiz.step]];
+  $('w-back').hidden = wiz.step === 0;
+  $('w-next').textContent = wiz.step === W.length - 1 ? 'Create instance' : 'Next';
+  $('w-next').disabled = W[wiz.step] === 'version' && !wiz.version;
+}
+for (const c of document.querySelectorAll('[data-type]')) c.onclick = () => { wiz.type = c.dataset.type; drawWizard(); };
+for (const c of document.querySelectorAll('[data-folder]')) c.onclick = () => { wiz.folder = c.dataset.folder; drawWizard(); };
+$('w-name').oninput = () => { wiz.name = $('w-name').value; drawWizard(); };
+$('w-desc').oninput = () => { wiz.desc = $('w-desc').value; };
+$('w-back').onclick = () => { wiz.step--; drawWizard(); };
+$('w-cancel').onclick = () => ($('wizard').hidden = true);
+$('w-next').onclick = async () => {
+  if (wiz.step < W.length - 1) { wiz.step++; drawWizard(); if (W[wiz.step] === 'name') $('w-name').focus(); return; }
+  const spec = { name: wiz.name, description: wiz.desc, version: wiz.version, vanilla: wiz.type === 'vanilla', shared: wiz.folder === 'shared' };
+  let id;
+  try { id = await invoke('create_instance', { spec }); } catch (err) { return say(String(err)); }
+  $('wizard').hidden = true;
+  say(`${spec.name.trim()} was made`);
+  await refresh();
+  openInstance(id);
+};
+$('inst-new').onclick = openWizard;
+
+// resource packs, after OneClient's content list: search, where they came from, on or off, sorted
+let packList = [], installedCF = new Set();
+async function loadPacks() {
+  packList = await invoke('packs').catch((err) => { say(String(err)); return []; });
+  installedCF = new Set(packList.map((p) => p.curseforge).filter(Boolean));
+}
 async function drawPacks() {
-  const packs = await invoke('packs').catch((err) => { say(String(err)); return []; });
-  $('pack-list').replaceChildren(...packs.map((pack) => {
+  await loadPacks();
+  drawPackList();
+}
+function drawPackList() {
+  const find = $('pk-find').value.trim().toLowerCase(), src = document.querySelector('#pk-src .on').dataset.src, showing = $('pk-show').value, sort = $('pk-sort').value;
+  const list = packList
+    .filter((p) => !find || `${p.name} ${p.description}`.toLowerCase().includes(find))
+    .filter((p) => src === 'all' || (src === 'online') === !!p.curseforge)
+    .filter((p) => showing === 'all' || (showing === 'on') === p.on)
+    .sort((a, b) => sort === 'added' ? b.added - a.added : sort === 'size' ? b.size - a.size : (sort === 'name-desc' ? -1 : 1) * a.name.localeCompare(b.name));
+  $('pack-list').replaceChildren(...list.map((pack) => {
     const toggle = el('button', { className: 'btn' + (pack.on ? ' on' : ''), textContent: pack.on ? 'On' : 'Off', role: 'switch' });
     toggle.setAttribute('aria-checked', pack.on);
     toggle.onclick = () => invoke('set_pack', { folder: pack.folder, on: !pack.on }).then(drawPacks, (err) => say(String(err)));
     const remove = el('button', { className: 'btn', textContent: 'Delete' });
-    remove.onclick = () => {
-      if (!remove.classList.contains('sure')) { remove.classList.add('sure'); remove.textContent = 'Delete it?'; return; }
-      invoke('remove_pack', { folder: pack.folder }).then(() => { say(`${pack.name} was deleted`); drawPacks(); }, (err) => say(String(err)));
-    };
-    return el('div', { className: 'row' }, el('div', {}, pack.name, ...(pack.description ? [el('small', { className: 'note' }, pack.description)] : [])), toggle, remove);
+    remove.onclick = sure(remove, 'Delete it?', () => invoke('remove_pack', { folder: pack.folder }).then(() => { say(`${pack.name} was deleted`); drawPacks(); }, (err) => say(String(err))));
+    const icon = pack.icon ? el('img', { className: 'picon', src: pack.icon, alt: '' }) : el('span', { className: 'picon blank' }, pack.name.slice(0, 1).toUpperCase());
+    const info = el('div', {}, pack.name, ...(pack.description ? [el('small', { className: 'note' }, pack.description)] : []),
+      el('span', { className: 'ptags' }, el('span', { className: 'tag' + (pack.curseforge ? '' : ' plain') }, pack.curseforge ? 'CurseForge' : 'Local'), el('span', { className: 'muted' }, bytes(pack.size))));
+    return el('div', { className: 'row prow' }, icon, info, toggle, remove);
   }));
-  if (!packs.length) $('pack-list').replaceChildren(el('div', { className: 'row muted' }, 'No resource packs yet'));
+  const none = packList.length ? 'No packs match your search.' : 'No resource packs yet. Browse CurseForge or drop a .mcpack on the window.';
+  if (!list.length) $('pack-list').replaceChildren(el('div', { className: 'row muted' }, none));
 }
+$('pk-find').oninput = $('pk-show').onchange = $('pk-sort').onchange = drawPackList;
+for (const b of $('pk-src').children) b.onclick = () => { for (const x of $('pk-src').children) x.classList.toggle('on', x === b); drawPackList(); };
 async function addPack(path) {
   try { await invoke('import_pack', { path }); say('The pack was added and turned on'); } catch (err) { say(String(err)); }
   drawPacks();
@@ -440,54 +934,107 @@ let cfPage = 0, cfTimer;
 const short = (n) => n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}K` : String(n);
 async function browse(more) {
   cfPage = more ? cfPage + 1 : 0;
-  if (!more) $('cf-cards').replaceChildren(el('p', { className: 'muted' }, 'Loading…'));
+  const skel = () => el('div', { className: 'card skel' }, el('div', { className: 'banner sk' }), el('div', { className: 'body' }, el('div', { className: 'line sk', style: '' }), el('div', { className: 'line sk' }), el('div', { className: 'line sk' })));
+  const skels = Array.from({ length: more ? 3 : 9 }, skel);
+  if (!more) $('cf-cards').replaceChildren(...skels); else $('cf-cards').append(...skels);
   let items;
   try { items = await invoke('browse', { search: $('cf-find').value.trim(), sort: $('cf-sort').value, page: cfPage }); }
-  catch (err) { $('cf-cards').replaceChildren(el('p', { className: 'muted' }, String(err))); return; }
+  catch (err) { skels.forEach((k) => k.remove()); if (!more) $('cf-cards').replaceChildren(el('p', { className: 'muted' }, String(err))); return; }
+  skels.forEach((k) => k.remove());
   const cards = items.map((item) => {
-    const get = el('button', { className: 'get', textContent: item.installable ? '↓' : '↗', title: item.installable ? 'Install' : 'Only on CurseForge' });
-    get.onclick = async (event) => {
-      event.stopPropagation();
-      if (!item.installable) return item.page && invoke('open_page', { url: item.page });
-      get.disabled = true; get.textContent = '…';
-      try { await invoke('install_pack', { id: item.id }); get.textContent = '✓'; say(`${item.name} was installed and turned on`); }
-      catch (err) { get.disabled = false; get.textContent = '↓'; say(String(err)); }
-    };
+    const have = installedCF.has(item.id);
+    const get = el('button', { className: 'get', textContent: have ? '✓' : item.installable ? '↓' : '↗', title: have ? 'Installed' : item.installable ? 'Install' : 'Only on CurseForge', disabled: have });
+    get.dataset.cf = item.id;
+    get.onclick = (event) => { event.stopPropagation(); installItem(item, get, '↓'); };
     const card = el('div', { className: 'card' },
-      el('div', { className: 'banner', style: item.logo ? `background-image:url("${item.logo}")` : '' }), get,
+      el('img', { className: 'banner', src: item.logo ?? '', alt: '', loading: 'lazy', decoding: 'async' }), get,
       el('div', { className: 'body' }, el('strong', {}, item.name), el('span', { className: 'by' }, `by ${item.author}`), el('p', {}, item.summary), el('span', { className: 'count' }, `${short(item.downloads)} downloads`)));
-    card.onclick = () => item.page && invoke('open_page', { url: item.page });
+    card.onclick = () => openDetail(item);
     return card;
   });
   if (more) $('cf-cards').append(...cards);
   else $('cf-cards').replaceChildren(...(cards.length ? cards : [el('p', { className: 'muted' }, 'No packs found. Try another search.')]));
   $('cf-more').hidden = items.length < 24;
 }
+async function installItem(item, button, idle) {
+  if (!item.installable) return item.page && invoke('open_page', { url: item.page });
+  button.disabled = true; button.replaceChildren(el('span', { className: 'dots' }, el('b'), el('b'), el('b')));
+  try {
+    await invoke('install_pack', { id: item.id });
+    installedCF.add(item.id);
+    for (const b of document.querySelectorAll(`.get[data-cf="${item.id}"]`)) Object.assign(b, { textContent: '✓', disabled: true, title: 'Installed' });
+    if (detailItem?.id === item.id) Object.assign($('d-get'), { textContent: 'Installed', disabled: true });
+    say(`${item.name} was installed and turned on`);
+    loadPacks();
+  }
+  catch (err) { button.disabled = false; button.textContent = idle; say(String(err)); }
+}
+// the author's description is HTML from the internet: only plain formatting is kept, nothing that runs
+const SAFE = new Set(['P', 'BR', 'B', 'STRONG', 'I', 'EM', 'U', 'UL', 'OL', 'LI', 'H1', 'H2', 'H3', 'H4', 'A', 'IMG', 'SPAN', 'DIV', 'HR', 'BLOCKQUOTE', 'CODE', 'PRE', 'TABLE', 'TBODY', 'TR', 'TD', 'TH', 'CENTER']);
+function clean(html) {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const walk = (node) => {
+    for (const child of [...node.children]) {
+      if (!SAFE.has(child.tagName)) { child.replaceWith(...(['SCRIPT', 'STYLE', 'IFRAME', 'OBJECT', 'EMBED'].includes(child.tagName) ? [] : child.childNodes)); continue; }
+      const href = child.getAttribute('href'), src = child.getAttribute('src');
+      for (const attr of [...child.attributes]) child.removeAttribute(attr.name);
+      if (child.tagName === 'A' && href && /^https:\/\//.test(href)) { child.dataset.href = href; child.setAttribute('href', '#'); }
+      if (child.tagName === 'IMG') { if (src && /^https:\/\/media\.forgecdn\.net\//.test(src)) { child.setAttribute('src', src); child.setAttribute('loading', 'lazy'); } else { child.remove(); continue; } }
+      walk(child);
+    }
+  };
+  walk(doc.body);
+  return doc.body;
+}
+let detailItem = null;
+async function openDetail(item) {
+  detailItem = item;
+  $('d-logo').src = item.logo ?? '';
+  $('d-name').textContent = item.name;
+  $('d-by').textContent = `by ${item.author} · ${short(item.downloads)} downloads`;
+  const have = installedCF.has(item.id);
+  $('d-get').textContent = have ? 'Installed' : item.installable ? 'Install' : 'Get it on CurseForge';
+  $('d-get').disabled = have;
+  $('d-facts').textContent = '';
+  $('d-shots').replaceChildren(...Array.from({ length: 3 }, () => el('div', { className: 'sk', style: '' })));
+  for (const k of $('d-shots').children) k.classList.add('shot-sk');
+  $('d-desc').replaceChildren(...[90, 100, 75, 95, 60, 85, 40].map((w) => el('div', { className: 'sk line', style: '' }, '')));
+  $('detail').hidden = false;
+  let d;
+  try { d = await invoke('pack_details', { id: item.id }); } catch (err) { if (detailItem === item) $('d-desc').textContent = String(err); return; }
+  if (detailItem !== item) return;
+  $('d-shots').replaceChildren(...d.screenshots.slice(0, 8).map((src) => el('img', { src, alt: '', loading: 'lazy' })));
+  $('d-desc').replaceChildren(...clean(d.description).childNodes);
+  $('d-facts').textContent = d.updated ? `Updated ${new Date(d.updated).toLocaleDateString()}` : '';
+}
+$('d-desc').onclick = (event) => { const a = event.target.closest('a'); if (!a) return; event.preventDefault(); if (a.dataset.href?.startsWith('https://www.curseforge.com/')) invoke('open_page', { url: a.dataset.href }); };
+$('d-get').onclick = () => detailItem && installItem(detailItem, $('d-get'), 'Install');
+$('d-page').onclick = () => detailItem?.page && invoke('open_page', { url: detailItem.page });
+$('d-close').onclick = () => { $('detail').hidden = true; detailItem = null; };
+$('detail').onclick = (event) => { if (event.target === $('detail')) $('d-close').onclick(); };
 $('cf-find').oninput = () => { clearTimeout(cfTimer); cfTimer = setTimeout(() => browse(false), 400); };
 $('cf-sort').onchange = () => browse(false);
 $('cf-more').onclick = () => browse(true);
 for (const tab of document.querySelectorAll('[data-packs]')) tab.onclick = () => {
   const browsing = tab.dataset.packs === 'browse';
   for (const t of document.querySelectorAll('[data-packs]')) t.classList.toggle('on', t === tab);
-  $('browse').hidden = !browsing; $('pack-list').hidden = browsing; $('pack-add').hidden = browsing;
-  if (browsing && !$('cf-cards').children.length) browse(false); else if (!browsing) drawPacks();
+  $('browse').hidden = !browsing; $('mine').hidden = $('pack-add').hidden = $('packs-hint').hidden = browsing;
+  if (browsing && !$('cf-cards').children.length) loadPacks().then(() => browse(false)); else if (!browsing) drawPacks();
 };
 $('pack-add').onclick = async () => { const path = await invoke('pick_pack').catch((err) => say(String(err))); if (path) addPack(path); };
 listen('tauri://drag-drop', (event) => {
   const files = (event.payload.paths ?? []).filter((path) => /\.(mcpack|zip)$/i.test(path));
-  if (files.length) { show('packs'); files.forEach(addPack); }
+  if (files.length) { openInstance(insts.selected, 'textures'); files.forEach(addPack); }
 });
-document.querySelector('[data-page="packs"]').addEventListener('click', drawPacks);
 
 async function refresh() {
-  state = await invoke('state');
+  [state, insts] = await Promise.all([invoke('state'), invoke('instances')]);
   draw();
 }
 
 function install(code, name) {
   return run(`Minecraft ${name} is ready`, async () => {
     await invoke('install', { code, name });
-    localStorage.setItem('version', name);
   });
 }
 
@@ -516,8 +1063,6 @@ listen('signed-in', async ({ payload }) => {
 });
 
 $('sign').onclick = () => (state.email ? run('Signed out', () => invoke('sign_out')) : signIn());
-$('faster').onclick = () => invoke('faster_graphics').then(() => say('The game will start with faster graphics'), (err) => say(String(err)));
-$('folder').onclick = () => invoke('open_game_folder').catch((err) => say(String(err)));
 
 $('size').append(...SIZES.map((size) => new Option(size.replace('x', ' × '), size)));
 $('size').value = SIZES.includes(localStorage.getItem('size')) ? localStorage.getItem('size') : SIZES[0];
@@ -528,12 +1073,11 @@ $('find').oninput = () => {
 };
 // a known problem with the picked version, shown above the title
 async function warn() {
-  const name = $('version').value, text = name && await invoke('warning', { version: name }).catch(() => null);
-  if (name !== $('version').value) return;
+  const name = versionOf(current()), text = name && await invoke('warning', { version: name }).catch(() => null);
+  if (name !== versionOf(current())) return;
   $('warn').textContent = text ?? '';
   $('warn').hidden = !text;
 }
-$('version').onchange = () => { localStorage.setItem('version', $('version').value); warn(); };
 
 // the game's output, kept to the last 3000 lines. A line that repeats the one
 // before it, apart from the time, only counts up
@@ -576,24 +1120,26 @@ listen('log', ({ payload }) => {
 listen('game', ({ payload }) => {
   state.running = payload;
   if (payload) logLines = [], logRedraw();
-  $('log-state').textContent = payload ? 'Minecraft is running' : 'What the game prints while it runs. It starts over with every game.';
+  $('log-state').textContent = payload ? 'Minecraft is running' : 'This instance is not running. Its past games are under Logs.';
   $('log-state').classList.toggle('on', payload);
   draw();
-  if (!payload) say('Minecraft closed');
+  if (!payload) { say('Minecraft closed'); refresh(); }
 });
 $('log-find').oninput = logRedraw;
 $('log-copy').onclick = () => navigator.clipboard.writeText(logLines.filter(logMatch).map((e) => (e.n > 1 ? `${e.text} ×${e.n}` : e.text)).join('\n')).then(() => say('Log copied'), (err) => say(String(err)));
 
-$('play').onclick = async () => {
-  const version = $('version').value;
+async function play() {
+  if (state.running) return invoke('stop_game').catch((err) => say(String(err)));
+  const inst = current(), version = versionOf(inst);
   if (!version && state.windows) return setup(3, ($('setup').hidden = false));
   if (!version) return show('versions');
-  const [width, height] = $('size').value.split('x').map(Number);
+  const [width, height] = inst?.width ? [inst.width, inst.height] : $('size').value.split('x').map(Number);
   working(true);
   say('Starting Minecraft', null);
-  try { await invoke('play', { version, width, height }); say('Minecraft is starting'); } catch (err) { say(String(err)); }
+  try { await invoke('play', { version, width, height }); say('Minecraft is starting'); openInstance(inst.id, 'live'); } catch (err) { say(String(err)); }
   setTimeout(() => working(false), 3000);
-};
+}
+$('play').onclick = $('inst-play').onclick = play;
 
 document.fonts.ready.then(() => show('home'));
 const ready = refresh().then(() => {
@@ -662,7 +1208,8 @@ function flow(now) {
   const dt = Math.min((now - lastFrame) / 1000, 0.05), t = now / 1000;
   lastFrame = now;
   // the water keeps moving while the Mods page is away, only the drawing waits
-  const shown = $('mods').classList.contains('on');
+  const shown = $('inst').classList.contains('on') && $('tab-mods').classList.contains('on');
+  if (!shown) return requestAnimationFrame(flow);
   for (const tile of document.querySelectorAll('.tile')) {
     const on = tile.getAttribute('aria-checked') === 'true', svg = tile.querySelector('.water');
     if (!waters.has(tile)) waters.set(tile, { cover: 1, level: on ? 0.34 : -0.2, vel: 0, seed: Math.random() * 9 });
@@ -700,7 +1247,7 @@ const win = window.__TAURI__.window.getCurrentWindow();
 document.addEventListener('keydown', async (event) => event.key === 'Escape' && (await win.isFullscreen()) && win.setFullscreen(false));
 document.addEventListener('mousedown', async (event) => {
   // a window filling the screen stays put
-  if (event.button !== 0 || event.target.closest('button, select, input, a, pre, .tile, .row')) return;
+  if (event.button !== 0 || event.target.closest('button, select, input, a, pre, .tile, .row, .overlay')) return;
   const start = { x: event.screenX, y: event.screenY };
   drag = start;
   const [pos, scale, fullscreen] = await Promise.all([win.outerPosition(), win.scaleFactor(), win.isFullscreen()]);
@@ -712,6 +1259,55 @@ document.addEventListener('mousemove', (event) => {
   win.setPosition(new window.__TAURI__.dpi.PhysicalPosition(drag.pos.x + Math.round((event.screenX - drag.x) * drag.scale), drag.pos.y + Math.round((event.screenY - drag.y) * drag.scale)));
 });
 document.addEventListener('mouseup', () => (drag = null));
+// A mouse wheel moves the page in steps, which WebKit doesn't smooth, so a wheel's steps
+// glide to where they point. A trackpad sends small, already smooth steps and is left alone
+// ponytail: mouse versus trackpad is guessed from the step size; a fast trackpad flick can count as a wheel
+const glides = new WeakMap();
+function scroller(node) {
+  for (; node && node !== document.body; node = node.parentElement) {
+    const style = getComputedStyle(node);
+    if (/(auto|scroll)/.test(style.overflowY) && node.scrollHeight > node.clientHeight + 1) return node;
+  }
+  return null;
+}
+document.addEventListener('wheel', (event) => {
+  const wheel = event.deltaMode !== 0 || (Math.abs(event.deltaY) >= 50 && Math.abs(event.deltaX) < 1);
+  if (!wheel || event.ctrlKey) return;
+  const box = scroller(event.target);
+  if (!box) return;
+  event.preventDefault();
+  const step = event.deltaMode === 1 ? event.deltaY * 40 : event.deltaY;
+  let g = glides.get(box);
+  if (!g) glides.set(box, (g = { target: box.scrollTop, moving: false }));
+  if (!g.moving) g.target = box.scrollTop;
+  g.target = Math.max(0, Math.min(box.scrollHeight - box.clientHeight, g.target + step));
+  if (g.moving) return;
+  g.moving = true;
+  const tick = () => {
+    const gap = g.target - box.scrollTop;
+    const before = box.scrollTop;
+    if (Math.abs(gap) < 1) { box.scrollTop = g.target; g.moving = false; return; }
+    // whole pixels at least, since WebKit may drop a fraction and the glide would never arrive
+    box.scrollTop += Math.sign(gap) * Math.max(1, Math.abs(gap) * 0.2);
+    if (box.scrollTop === before) { g.moving = false; return; }
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}, { passive: false });
+// every segmented choice gets a pill that follows its picked button
+function glide(seg) {
+  const on = seg.querySelector('button.on');
+  let pill = seg.querySelector(':scope > i');
+  if (!pill) seg.prepend((pill = el('i')));
+  if (!on || !on.offsetWidth) return;
+  pill.style.width = `${on.offsetWidth}px`;
+  pill.style.transform = `translateX(${on.offsetLeft}px)`;
+}
+const segs = new MutationObserver((changes) => new Set(changes.map((c) => c.target.closest('.seg'))).forEach((seg) => seg && glide(seg)));
+for (const seg of document.querySelectorAll('.seg')) { glide(seg); segs.observe(seg, { attributes: true, attributeFilter: ['class'], subtree: true }); }
+// a seg that was hidden has no size until shown, so place the pills again when panels change
+new MutationObserver(() => document.querySelectorAll('.seg').forEach(glide)).observe(document.body, { attributes: true, attributeFilter: ['class', 'hidden'], subtree: true });
+document.fonts.ready.then(() => document.querySelectorAll('.seg').forEach(glide));
 // a launcher has no use for the browser's Reload and Inspect Element
 document.addEventListener('contextmenu', (event) => event.target.closest('input') || event.preventDefault());
 </script>

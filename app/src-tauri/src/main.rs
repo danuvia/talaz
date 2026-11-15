@@ -12,10 +12,13 @@ use tauri::Emitter;
 
 /// Whether a game Talaz started is still running, so a second Play waits
 static RUNNING: AtomicBool = AtomicBool::new(false);
+/// the running game's process, for Stop
+static GAME_PID: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
 
 mod device;
 mod play;
 mod curseforge;
+mod instances;
 mod packs;
 mod runtime;
 #[cfg(windows)]
@@ -44,6 +47,10 @@ fn game_dir() -> Option<PathBuf> {
     // ponytail: the shared folder of the GDK builds, from what players report; per account folders sit beside it under Users
     if cfg!(windows) {
         return Some(PathBuf::from(std::env::var_os("APPDATA")?).join("Minecraft Bedrock/Users/Shared"));
+    }
+    let instance = instances::selected();
+    if !instance.shared {
+        return instances::folder(&instance.id);
     }
     let picked = game_folder_file().and_then(|file| std::fs::read_to_string(file).ok()).map(|text| PathBuf::from(text.trim()));
     picked.filter(|dir| dir.is_absolute()).or_else(|| Some(root()?.join("game")))
@@ -632,6 +639,17 @@ fn open_store() -> Result<(), String> {
     Command::new("cmd").args(["/c", "start", "", "ms-windows-store://pdp/?productid=9NBLGGH2JHXJ"]).spawn().map(drop).map_err(|err| err.to_string())
 }
 
+/// Stops the running game, like closing its window
+#[tauri::command]
+fn stop_game() -> Result<(), String> {
+    let pid = GAME_PID.load(Ordering::SeqCst);
+    if pid == 0 || !RUNNING.load(Ordering::SeqCst) {
+        return Err("The game isn't running".into());
+    }
+    let mut kill = if cfg!(windows) { let mut c = Command::new("taskkill"); c.args(["/PID", &pid.to_string(), "/F"]); c } else { let mut c = Command::new("kill"); c.arg(pid.to_string()); c };
+    kill.status().map(drop).map_err(|e| e.to_string())
+}
+
 /// Shows the folder with the worlds and resource packs
 #[tauri::command]
 fn open_game_folder() -> Result<(), String> {
@@ -648,6 +666,8 @@ fn play(app: tauri::AppHandle, version: String, width: u32, height: u32) -> Resu
     // the name comes from the page, so only take one that is installed
     let (_, game) = installed().into_iter().find(|(name, _)| *name == version).ok_or("That version is not installed")?;
     runtime::ensure(&app)?;
+    // ponytail: a vanilla instance only skips the mod on Mac and Linux; Windows still injects it
+    let vanilla = instances::selected().vanilla;
     let mods = place_mod()?;
     let data = game_dir();
     let reach: Vec<&std::path::Path> = [Some(game.as_path()), data.as_deref(), Some(mods.as_path())].into_iter().flatten().collect();
@@ -670,20 +690,25 @@ fn play(app: tauri::AppHandle, version: String, width: u32, height: u32) -> Resu
             std::fs::write(&settings, "enable_menubar=false\n").map_err(|err| err.to_string())?;
         }
         // without the pack the game shows its own title screen, so a failure here is not worth stopping for
-        let _ = install_pack(&data, &game);
+        if !vanilla {
+            let _ = install_pack(&data, &game);
+        }
         cmd.arg("-dd").arg(data).arg("-ww").arg(width.clamp(640, 7680).to_string()).arg("-wh").arg(height.clamp(360, 4320).to_string());
     }
-    cmd.arg("-m").arg(mods);
+    if !vanilla {
+        cmd.arg("-m").arg(mods);
+    }
     if RUNNING.swap(true, Ordering::SeqCst) {
         return Err("Minecraft is already running".into());
     }
     // The game writes straight into logs/latest.log rather than through the launcher, so
     // closing the launcher leaves it nothing broken to write to. The last game's log is kept
     // as previous.log, so a crash is still there after starting again
-    let log = root().map(|root| root.join("logs/latest.log"));
+    // each instance keeps its own logs, in its folder; the last game's log is kept under its time
+    let log = instances::logs_dir().map(|dir| dir.join("latest.log"));
     let file = log.as_ref().and_then(|path| {
         std::fs::create_dir_all(path.parent()?).ok()?;
-        let _ = std::fs::rename(path, path.with_file_name("previous.log"));
+        instances::rotate(path.parent()?);
         std::fs::File::create(path).ok()
     });
     let (out, err) = match file.as_ref().map(|file| (file.try_clone(), file.try_clone())) {
@@ -697,7 +722,9 @@ fn play(app: tauri::AppHandle, version: String, width: u32, height: u32) -> Resu
             return Err(err.to_string());
         }
     };
+    GAME_PID.store(child.id(), Ordering::SeqCst);
     let _ = app.emit("game", true);
+    let (instance, started) = (instances::selected().id, instances::start_time());
     // the page follows the file while the game runs, in batches since the game can print
     // thousands of lines a second
     if let Some(path) = log {
@@ -722,6 +749,7 @@ fn play(app: tauri::AppHandle, version: String, width: u32, height: u32) -> Resu
     }
     std::thread::spawn(move || {
         let _ = child.wait();
+        instances::record(&instance, started);
         RUNNING.store(false, Ordering::SeqCst);
         let _ = app.emit("game", false);
     });
@@ -767,7 +795,7 @@ fn main() {
             update(app.handle().clone());
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![state, play, set_mod, set_option, remove, notes, warning, faster_graphics, open_game_folder, open_store, pick_folder, finish_setup, play::available, play::sign_in, play::sign_out, play::install, packs::packs, packs::set_pack, packs::import_pack, packs::pick_pack, packs::remove_pack, curseforge::browse, curseforge::install_pack, curseforge::open_page])
+        .invoke_handler(tauri::generate_handler![state, play, set_mod, set_option, remove, notes, warning, faster_graphics, open_game_folder, open_store, pick_folder, finish_setup, play::available, play::sign_in, play::sign_out, play::install, packs::packs, packs::set_pack, packs::import_pack, packs::pick_pack, packs::remove_pack, curseforge::browse, curseforge::install_pack, curseforge::open_page, curseforge::pack_details, instances::instances, instances::select_instance, instances::create_instance, instances::update_instance, instances::delete_instance, instances::worlds, instances::delete_world, instances::open_world, instances::logs, instances::read_log, instances::delete_log, stop_game])
         .run(tauri::generate_context!())
         .expect("failed to start Talaz");
 }
