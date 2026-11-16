@@ -183,7 +183,7 @@ fn mods_def() -> &'static (Vec<DefMod>, Vec<DefSlider>) {
         // One that needs a hook leaves Windows out, which has none yet
         let mut current: Option<DefMod> = None;
         let mut needs = false;
-        let mut finish = |m: Option<DefMod>, needs: bool, mods: &mut Vec<DefMod>| {
+        let finish = |m: Option<DefMod>, needs: bool, mods: &mut Vec<DefMod>| {
             if let Some(m) = m.filter(|_| !(needs && cfg!(windows))) {
                 mods.push(m);
             }

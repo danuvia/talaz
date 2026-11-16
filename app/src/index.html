@@ -283,6 +283,7 @@ h1 { font-size: 84px; line-height: 1; letter-spacing: -4px; margin: 10px 0 30px 
 .prow { padding-top: 10px; padding-bottom: 10px; }
 .prow > .picon { flex: none; width: 72px; height: 72px; border-radius: 16px; object-fit: cover; image-rendering: pixelated; background: #0e151b; }
 .prow > .picon.blank { display: grid; place-items: center; color: var(--muted); }
+.per-world { flex: none; padding: 0 8px; font-size: 12.5px; white-space: nowrap; }
 .prow > div { flex: 1; min-width: 0; }
 .ptags { display: flex; gap: 8px; align-items: center; font-size: 11.5px; }
 .tag.plain { background: var(--line); color: var(--muted); }
@@ -469,7 +470,7 @@ talaz
 <button class="btn solid big" id="inst-play">Play</button>
 </div>
 <div class="tabs" role="tablist" id="inst-tabs">
-<button data-tab="overview" class="on">Overview</button><button data-tab="mods">Mods</button><button data-tab="textures">Textures</button><button data-tab="worlds">Worlds</button><button data-tab="logs">Logs</button><button data-tab="live">Live log</button><button data-tab="isettings">Settings</button>
+<button data-tab="overview" class="on">Overview</button><button data-tab="mods">Mods</button><button data-tab="textures">Packs</button><button data-tab="worlds">Worlds</button><button data-tab="logs">Logs</button><button data-tab="live">Live log</button><button data-tab="isettings">Settings</button>
 </div>
 
 <div class="panels" id="panels">
@@ -486,14 +487,14 @@ talaz
 </div>
 
 <div class="panel" id="tab-textures">
-<div class="logbar stick"><div class="seg" role="tablist"><button class="on" data-packs="mine">Installed</button><button data-packs="browse">Browse</button></div><span class="grow"></span><button class="btn" id="pack-add">Add a pack</button></div>
-<p class="hint" id="packs-hint">Packs that are on load in every world, the top one over the others. Drop a .mcpack on the window to add it.</p>
+<div class="logbar stick"><div class="seg" role="tablist"><button class="on" data-packs="mine">Installed</button><button data-packs="browse">Browse</button></div><span class="grow"></span><button class="btn" id="pack-add">Add a file</button></div>
+<p class="hint" id="packs-hint">Resource packs that are on load in every world, the top one over the others. An add-on's behavior pack is turned on in a world's own settings. Drop a .mcpack or .mcaddon on the window to add it.</p>
 <div id="mine">
-<div class="logbar"><input id="pk-find" type="search" placeholder="Search installed packs" aria-label="Search installed packs"><div class="seg" id="pk-src"><button class="on" data-src="all">All</button><button data-src="online">Online</button><button data-src="local">Local</button></div><select id="pk-show" aria-label="Show"><option value="all">All packs</option><option value="on">On only</option><option value="off">Off only</option></select><select id="pk-sort" aria-label="Sort by"><option value="name">Name (A-Z)</option><option value="name-desc">Name (Z-A)</option><option value="added">Recently added</option><option value="size">Size (largest)</option></select></div>
+<div class="logbar"><input id="pk-find" type="search" placeholder="Search installed packs" aria-label="Search installed packs"><div class="seg" id="pk-src"><button class="on" data-src="all">All</button><button data-src="online">Online</button><button data-src="local">Local</button></div><select id="pk-show" aria-label="Show"><option value="all">All packs</option><option value="on">On only</option><option value="off">Off only</option><option value="addons">Add-ons only</option></select><select id="pk-sort" aria-label="Sort by"><option value="name">Name (A-Z)</option><option value="name-desc">Name (Z-A)</option><option value="added">Recently added</option><option value="size">Size (largest)</option></select></div>
 <div class="list tall" id="pack-list"></div>
 </div>
 <div id="browse" hidden>
-<div class="logbar stick second"><input id="cf-find" type="search" placeholder="Search CurseForge" aria-label="Search CurseForge"><select id="cf-sort" aria-label="Sort"><option value="popular">Popular</option><option value="downloads">Most downloads</option><option value="updated">Recently updated</option><option value="name">Name</option></select></div>
+<div class="logbar stick second"><div class="seg" id="cf-kind" role="tablist"><button class="on" data-kind="packs">Resource packs</button><button data-kind="addons">Add-ons</button></div><input id="cf-find" type="search" placeholder="Search CurseForge" aria-label="Search CurseForge"><select id="cf-sort" aria-label="Sort"><option value="popular">Popular</option><option value="downloads">Most downloads</option><option value="updated">Recently updated</option><option value="name">Name</option></select></div>
 <div class="cards" id="cf-cards"></div>
 <div id="cf-more" aria-hidden="true"></div>
 <p class="fine">From CurseForge. Downloads count on the author's page.</p>
@@ -1071,26 +1072,30 @@ function drawPackList() {
   const list = packList
     .filter((p) => !find || `${p.name} ${p.description}`.toLowerCase().includes(find))
     .filter((p) => src === 'all' || (src === 'online') === !!p.curseforge)
-    .filter((p) => showing === 'all' || (showing === 'on') === p.on)
+    .filter((p) => showing === 'all' || (showing === 'addons' ? p.kind === 'behavior' : p.kind !== 'behavior' && (showing === 'on') === p.on))
     .sort((a, b) => sort === 'added' ? b.added - a.added : sort === 'size' ? b.size - a.size : (sort === 'name-desc' ? -1 : 1) * a.name.localeCompare(b.name));
   $('pack-list').replaceChildren(...list.map((pack) => {
-    const toggle = el('button', { className: 'btn' + (pack.on ? ' on' : ''), textContent: pack.on ? 'On' : 'Off', role: 'switch' });
-    toggle.setAttribute('aria-checked', pack.on);
-    toggle.onclick = () => invoke('set_pack', { folder: pack.folder, on: !pack.on }).then(drawPacks, (err) => say(String(err)));
+    // a behavior pack has no switch here: each world turns it on in its own settings
+    const addon = pack.kind === 'behavior';
+    const toggle = addon ? el('span', { className: 'muted per-world' }, 'In world settings') : el('button', { className: 'btn' + (pack.on ? ' on' : ''), textContent: pack.on ? 'On' : 'Off', role: 'switch' });
+    if (!addon) {
+      toggle.setAttribute('aria-checked', pack.on);
+      toggle.onclick = () => invoke('set_pack', { folder: pack.folder, on: !pack.on }).then(drawPacks, (err) => say(String(err)));
+    }
     const remove = el('button', { className: 'btn', textContent: 'Delete' });
-    remove.onclick = sure(remove, 'Delete it?', () => invoke('remove_pack', { folder: pack.folder }).then(() => { say(`${pack.name} was deleted`); drawPacks(); }, (err) => say(String(err))));
+    remove.onclick = sure(remove, 'Delete it?', () => invoke('remove_pack', { folder: pack.folder, kind: pack.kind }).then(() => { say(`${pack.name} was deleted`); drawPacks(); }, (err) => say(String(err))));
     const icon = pack.icon ? el('img', { className: 'picon', src: pack.icon, alt: '' }) : el('span', { className: 'picon blank' }, pack.name.slice(0, 1).toUpperCase());
     const info = el('div', {}, pack.name, ...(pack.description ? [el('small', { className: 'note' }, pack.description)] : []),
-      el('span', { className: 'ptags' }, el('span', { className: 'tag' + (pack.curseforge ? '' : ' plain') }, pack.curseforge ? 'CurseForge' : 'Local'), el('span', { className: 'muted' }, bytes(pack.size))));
+      el('span', { className: 'ptags' }, ...(addon ? [el('span', { className: 'tag' }, 'Add-on')] : []), el('span', { className: 'tag' + (pack.curseforge ? '' : ' plain') }, pack.curseforge ? 'CurseForge' : 'Local'), el('span', { className: 'muted' }, bytes(pack.size))));
     return el('div', { className: 'row prow' }, icon, info, toggle, remove);
   }));
-  const none = packList.length ? 'No packs match your search.' : 'No resource packs yet. Browse CurseForge or drop a .mcpack on the window.';
+  const none = packList.length ? 'No packs match your search.' : 'No packs yet. Browse CurseForge or drop a .mcpack or .mcaddon on the window.';
   if (!list.length) $('pack-list').replaceChildren(el('div', { className: 'row muted' }, none));
 }
 $('pk-find').oninput = $('pk-show').onchange = $('pk-sort').onchange = drawPackList;
 for (const b of $('pk-src').children) b.onclick = () => { for (const x of $('pk-src').children) x.classList.toggle('on', x === b); drawPackList(); };
 async function addPack(path) {
-  try { await invoke('import_pack', { path }); say('The pack was added and turned on'); } catch (err) { say(String(err)); }
+  try { say(await invoke('import_pack', { path })); } catch (err) { say(String(err)); }
   drawPacks();
 }
 // browse: CurseForge's Bedrock resource packs, searched once typing stops
@@ -1099,16 +1104,17 @@ const short = (n) => n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${Math.
 async function browse(more) {
   if (more && (cfBusy || !cfMore)) return;
   cfBusy = true;
-  const asked = [$('cf-find').value, $('cf-sort').value].join();
+  const kind = document.querySelector('#cf-kind .on').dataset.kind;
+  const asked = [$('cf-find').value, $('cf-sort').value, kind].join();
   cfPage = more ? cfPage + 1 : 0;
   const skel = () => el('div', { className: 'card skel' }, el('div', { className: 'banner sk' }), el('div', { className: 'body' }, el('div', { className: 'line sk', style: '' }), el('div', { className: 'line sk' }), el('div', { className: 'line sk' })));
   const skels = Array.from({ length: more ? 3 : 9 }, skel);
   if (!more) $('cf-cards').replaceChildren(...skels); else $('cf-cards').append(...skels);
   let items;
-  try { items = await invoke('browse', { search: $('cf-find').value.trim(), sort: $('cf-sort').value, page: cfPage }); }
+  try { items = await invoke('browse', { search: $('cf-find').value.trim(), sort: $('cf-sort').value, page: cfPage, kind }); }
   catch (err) { skels.forEach((k) => k.remove()); cfBusy = false; cfMore = false; if (!more) $('cf-cards').replaceChildren(el('p', { className: 'muted' }, String(err))); return; }
   // the search changed while this one was on its way: its answer is stale
-  if (asked !== [$('cf-find').value, $('cf-sort').value].join()) { cfBusy = false; return browse(false); }
+  if (asked !== [$('cf-find').value, $('cf-sort').value, document.querySelector('#cf-kind .on').dataset.kind].join()) { cfBusy = false; return browse(false); }
   skels.forEach((k) => k.remove());
   const cards = items.map((item) => {
     const have = installedCF.has(item.id);
@@ -1134,11 +1140,11 @@ async function installItem(item, button, idle) {
   if (!item.installable) return item.page && invoke('open_page', { url: item.page });
   button.disabled = true; button.replaceChildren(el('span', { className: 'dots' }, el('b'), el('b'), el('b')));
   try {
-    await invoke('install_pack', { id: item.id });
+    const got = await invoke('install_pack', { id: item.id });
     installedCF.add(item.id);
     for (const b of document.querySelectorAll(`.get[data-cf="${item.id}"]`)) { b.replaceChildren(icon('check')); Object.assign(b, { disabled: true, title: 'Installed' }); }
     if (detailItem?.id === item.id) Object.assign($('d-get'), { textContent: 'Installed', disabled: true });
-    say(`${item.name} was installed and turned on`);
+    say(got === 'behavior' ? `${item.name} was installed. Turn it on in a world's settings` : `${item.name} was installed and turned on`);
     loadPacks();
   }
   catch (err) { button.disabled = false; if (ICONS[idle]) button.replaceChildren(icon(idle)); else button.textContent = idle; say(String(err)); }
@@ -1210,6 +1216,7 @@ $('d-close').onclick = () => { $('detail').hidden = true; detailItem = null; };
 $('detail').onclick = (event) => { if (event.target === $('detail')) $('d-close').onclick(); };
 $('cf-find').oninput = () => { clearTimeout(cfTimer); cfTimer = setTimeout(() => browse(false), 400); };
 $('cf-sort').onchange = () => browse(false);
+for (const b of $('cf-kind').children) b.onclick = () => { for (const x of $('cf-kind').children) x.classList.toggle('on', x === b); $('cf-find').placeholder = b.dataset.kind === 'addons' ? 'Search add-ons' : 'Search CurseForge'; browse(false); };
 // the next page loads by itself as the end of the list comes near
 new IntersectionObserver((entries) => { if (entries.some((e) => e.isIntersecting) && !$('browse').hidden) browse(true); }, { root: $('panels'), rootMargin: '0px 0px 400px 0px' }).observe($('cf-more'));
 for (const tab of document.querySelectorAll('[data-packs]')) tab.onclick = () => {
@@ -1220,11 +1227,11 @@ for (const tab of document.querySelectorAll('[data-packs]')) tab.onclick = () =>
 };
 // the system's own file picker, through Tauri, opens straight away
 $('pack-add').onclick = async () => {
-  const path = await window.__TAURI__.dialog.open({ title: 'Pick a resource pack', filters: [{ name: 'Resource packs', extensions: ['mcpack', 'zip'] }] }).catch((err) => say(String(err)));
+  const path = await window.__TAURI__.dialog.open({ title: 'Pick a pack or add-on', filters: [{ name: 'Packs and add-ons', extensions: ['mcpack', 'mcaddon', 'zip'] }] }).catch((err) => say(String(err)));
   if (path) addPack(path);
 };
 listen('tauri://drag-drop', (event) => {
-  const files = (event.payload.paths ?? []).filter((path) => /\.(mcpack|zip)$/i.test(path));
+  const files = (event.payload.paths ?? []).filter((path) => /\.(mcpack|mcaddon|zip)$/i.test(path));
   if (files.length) { openInstance(insts.selected, 'textures'); files.forEach(addPack); }
 });
 
@@ -1366,7 +1373,7 @@ const TOUR = [
   { page: 'home', at: () => document.querySelector('.go'), title: 'Play', text: 'Pick an instance and press Play. While the game runs, the same button stops it.' },
   { page: 'instances', at: () => $('inst-cards'), title: 'Instances', text: 'An instance is one setup of the game: its own version, mods, resource packs, worlds and logs. Click one to open it.' },
   { page: 'instances', at: () => $('inst-new'), title: 'Make your own', text: "A new instance takes four choices: Talaz's mods or vanilla, the version, where its worlds live, and a name." },
-  { page: 'inst', at: () => $('inst-tabs'), title: 'Inside an instance', text: 'Mods turns mods on and off. Textures holds resource packs and browses CurseForge. Worlds, Logs and Settings are here too.' },
+  { page: 'inst', at: () => $('inst-tabs'), title: 'Inside an instance', text: 'Mods turns mods on and off. Packs holds resource packs and add-ons, and browses CurseForge for both. Worlds, Logs and Settings are here too.' },
   { page: 'versions', at: () => document.querySelector('#versions .cols'), title: 'Versions', text: 'Download the game here with the account that owns it. "Full mods" marks the versions every mod works on.' },
   { page: 'home', at: () => $('play'), title: 'In the game', text: "Press Right Shift in a world to open Talaz's menu: every mod and its settings, and Edit HUD to move things around." },
 ];

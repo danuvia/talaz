@@ -36,29 +36,32 @@ fn get(path: &str, query: &[(&str, String)]) -> Result<Value, String> {
     serde_json::from_str(&text).map_err(|e| e.to_string())
 }
 
-/// The class id of Bedrock's resource packs, looked up once
-fn packs_class() -> Result<u64, String> {
-    static CLASS: OnceLock<u64> = OnceLock::new();
-    if let Some(id) = CLASS.get() {
-        return Ok(*id);
-    }
-    let classes = get("/categories", &[("gameId", BEDROCK.to_string()), ("classesOnly", "true".into())])?;
-    let id = classes["data"]
+/// The class ids of Bedrock's resource packs and add-ons, looked up once
+fn class(kind: &str) -> Result<u64, String> {
+    static CLASSES: OnceLock<Value> = OnceLock::new();
+    let classes = match CLASSES.get() {
+        Some(c) => c,
+        None => {
+            let c = get("/categories", &[("gameId", BEDROCK.to_string()), ("classesOnly", "true".into())])?;
+            CLASSES.get_or_init(|| c)
+        }
+    };
+    let slugs: &[&str] = if kind == "addons" { &["addons"] } else { &["texture-packs", "resource-packs"] };
+    classes["data"]
         .as_array()
-        .and_then(|list| list.iter().find(|c| c["slug"] == "texture-packs" || c["slug"] == "resource-packs"))
+        .and_then(|list| list.iter().find(|c| slugs.iter().any(|s| c["slug"] == *s)))
         .and_then(|c| c["id"].as_u64())
-        .ok_or("CurseForge has no resource packs for Bedrock")?;
-    Ok(*CLASS.get_or_init(|| id))
+        .ok_or_else(|| format!("CurseForge has no {kind} for Bedrock"))
 }
 
-/// sort: popular, downloads, updated or name
+/// sort: popular, downloads, updated or name; kind: packs or addons
 #[tauri::command(async)]
-pub fn browse(search: String, sort: String, page: u32) -> Result<Vec<Item>, String> {
+pub fn browse(search: String, sort: String, page: u32, kind: Option<String>) -> Result<Vec<Item>, String> {
     let field = match sort.as_str() { "downloads" => "6", "updated" => "3", "name" => "4", _ => "2" };
     let order = if sort == "name" { "asc" } else { "desc" };
     let data = get("/mods/search", &[
         ("gameId", BEDROCK.to_string()),
-        ("classId", packs_class()?.to_string()),
+        ("classId", class(kind.as_deref().unwrap_or("packs"))?.to_string()),
         ("searchFilter", search),
         ("sortField", field.into()),
         ("sortOrder", order.into()),
@@ -78,7 +81,7 @@ pub fn browse(search: String, sort: String, page: u32) -> Result<Vec<Item>, Stri
     }).collect())
 }
 
-/// Downloads the pack's newest file from CurseForge and adds it like a dropped .mcpack
+/// Downloads the newest file of a pack or add-on from CurseForge and adds it like a dropped one
 #[tauri::command(async)]
 pub fn install_pack(id: u64) -> Result<String, String> {
     if super::packs::packs()?.iter().any(|p| p.curseforge() == Some(id)) {
@@ -101,11 +104,13 @@ pub fn install_pack(id: u64) -> Result<String, String> {
     let mut out = std::fs::File::create(&path).map_err(|e| e.to_string())?;
     std::io::copy(&mut body.as_reader(), &mut out).map_err(|e| e.to_string())?;
     drop(out);
-    let result = super::packs::import_pack(path.to_string_lossy().to_string());
+    let result = super::packs::install_file(&path.to_string_lossy());
     let _ = std::fs::remove_dir_all(&dir);
-    let folder = result?;
-    super::packs::mark_source(&folder, id)?;
-    Ok(folder)
+    let placed = result?;
+    for (kind, folder) in &placed {
+        super::packs::mark_source(kind, folder, id)?;
+    }
+    Ok(if placed.iter().any(|(k, _)| *k == "behavior") { "behavior".into() } else { "resource".into() })
 }
 
 #[derive(Serialize)]
@@ -136,4 +141,17 @@ pub fn open_page(url: String) -> Result<(), String> {
         return Err("Not a CurseForge page".into());
     }
     super::runtime::system(if cfg!(target_os = "macos") { "open" } else if cfg!(windows) { "explorer" } else { "xdg-open" }).arg(url).spawn().map(drop).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    /// Lists Bedrock's classes on CurseForge (needs the key and the network)
+    #[test]
+    #[ignore]
+    fn classes() {
+        let classes = super::get("/categories", &[("gameId", super::BEDROCK.to_string()), ("classesOnly", "true".into())]).unwrap();
+        for c in classes["data"].as_array().unwrap() {
+            println!("{} {} {}", c["id"], c["slug"], c["name"]);
+        }
+    }
 }
