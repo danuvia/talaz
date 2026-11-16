@@ -126,6 +126,8 @@ fn installed() -> Vec<(String, PathBuf)> {
 
 /// Every mod and its settings, from the mod's own list; the Mods page is built from it
 const MODS_DEF: &str = include_str!("../../../mod/src/mods.def");
+/// The Lua mods' header lines, gathered by build.rs from mod/scripts
+const SCRIPTS: &str = include_str!(concat!(env!("OUT_DIR"), "/scripts.txt"));
 
 struct DefMod {
     id: &'static str,
@@ -177,6 +179,38 @@ fn mods_def() -> &'static (Vec<DefMod>, Vec<DefSlider>) {
                 sliders.push(DefSlider { mod_id: a[0], key: a[2], unit: a[3], min: num(a[4]), max: num(a[5]), step: num(a[6]), default: num(a[7]) });
             }
         }
+        // the Lua mods: "--@ id zoom", "--@ slider key|name|unit|min|max|step|first", and so on.
+        // One that needs a hook leaves Windows out, which has none yet
+        let mut current: Option<DefMod> = None;
+        let mut needs = false;
+        let mut finish = |m: Option<DefMod>, needs: bool, mods: &mut Vec<DefMod>| {
+            if let Some(m) = m.filter(|_| !(needs && cfg!(windows))) {
+                mods.push(m);
+            }
+        };
+        for line in SCRIPTS.lines() {
+            if line.starts_with("--@@ ") {
+                finish(current.take(), needs, &mut mods);
+                needs = false;
+                continue;
+            }
+            let Some((word, rest)) = line.strip_prefix("--@ ").map(|l| l.split_once(' ').unwrap_or((l, ""))) else { continue };
+            match word {
+                "id" => current = Some(DefMod { id: rest, name: rest, note: "", on: false }),
+                "name" => if let Some(m) = &mut current { m.name = rest },
+                "note" => if let Some(m) = &mut current { m.note = rest },
+                "on" => if let Some(m) = &mut current { m.on = rest == "1" },
+                "needs" => needs = true,
+                "slider" => {
+                    let p: Vec<&'static str> = rest.split('|').collect();
+                    if let (Some(m), 7) = (&current, p.len()) {
+                        sliders.push(DefSlider { mod_id: m.id, key: p[0], unit: p[2], min: num(p[3]), max: num(p[4]), step: num(p[5]), default: num(p[6]) });
+                    }
+                }
+                _ => {}
+            }
+        }
+        finish(current.take(), needs, &mut mods);
         (mods, sliders)
     })
 }
