@@ -791,9 +791,11 @@ function thumbAt(x, v = 0) {
     sx = 1 + stretch;
     sy = 1 - stretch * 0.4;
   }
+  // squashed, it also closes the bar's 4px padding on the wall's side, pressing into the edge
+  const press = over ? Math.sign(over) * 4 * (1 - sx) / 0.3 : 0;
   thumb.style.width = `${w}px`;
   thumb.style.transformOrigin = origin;
-  thumb.style.transform = `translateX(${pos}px) scale(${sx}, ${sy})`;
+  thumb.style.transform = `translateX(${pos + press}px) scale(${sx}, ${sy})`;
   const near = tabs.reduce((best, t) => Math.abs(t.offsetLeft - pos) < Math.abs(best.offsetLeft - pos) ? t : best);
   for (const t of tabs) t.toggleAttribute('aria-current', t === near);
 }
