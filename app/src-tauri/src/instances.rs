@@ -84,7 +84,7 @@ fn use_profile(name: &str) -> Result<(), String> {
 }
 
 /// Moves a file or folder to the system's trash, so a mistake can be undone
-fn trash(path: &Path) -> Result<(), String> {
+pub fn trash(path: &Path) -> Result<(), String> {
     use std::process::Command;
     let p = path.to_string_lossy().to_string();
     let ok = if cfg!(target_os = "macos") {

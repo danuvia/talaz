@@ -225,12 +225,48 @@ fn ini_set(text: &str, key: &str, value: f32) -> String {
 
 #[derive(serde::Serialize)]
 struct Mod {
-    id: &'static str,
-    name: &'static str,
-    note: &'static str,
+    id: String,
+    name: String,
+    note: String,
     on: bool,
     lua: bool,
     settings: bool,
+    /// added by the player into the scripts folder, so it can be deleted
+    user: bool,
+}
+
+/// The Lua mods the player added: the scripts folder beside the library, which the loader
+/// reads after its own and lets replace a built-in one of the same file name
+fn scripts_dir() -> Option<PathBuf> {
+    Some(mods_dir()?.join("scripts"))
+}
+
+/// A Lua mod's header: (id, name, note, on at first, has settings), when it has an id
+fn script_header(text: &str) -> Option<(String, String, String, bool, bool)> {
+    let (mut id, mut name, mut note, mut on, mut settings) = (String::new(), String::new(), String::new(), false, false);
+    for line in text.lines() {
+        let Some((word, rest)) = line.strip_prefix("--@ ").map(|l| l.split_once(' ').unwrap_or((l, ""))) else { continue };
+        match word {
+            "id" => id = rest.trim().to_string(),
+            "name" => name = rest.trim().to_string(),
+            "note" => note = rest.trim().to_string(),
+            "on" => on = rest.trim() == "1",
+            "slider" | "switch" => settings = true,
+            _ => {}
+        }
+    }
+    (!id.is_empty()).then(|| (id.clone(), if name.is_empty() { id } else { name }, note, on, settings))
+}
+
+/// The player's Lua mods: (file, header)
+fn user_scripts() -> Vec<(PathBuf, (String, String, String, bool, bool))> {
+    let Some(dir) = scripts_dir() else { return Vec::new() };
+    let mut out: Vec<_> = std::fs::read_dir(dir).into_iter().flatten().flatten().map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|x| x == "lua"))
+        .filter_map(|p| Some((p.clone(), script_header(&std::fs::read_to_string(&p).ok()?)?)))
+        .collect();
+    out.sort();
+    out
 }
 
 #[derive(serde::Serialize)]
@@ -262,17 +298,27 @@ fn state() -> State {
         windows: cfg!(windows),
         // ponytail: the game hooks are written for 1.21.114.1 on arm64 only; add versions and x86_64 here as they get their own
         full_mods: if cfg!(all(target_os = "macos", target_arch = "aarch64")) { vec!["1.21.114.1"] } else { vec![] },
-        mods: mods_def()
-            .iter()
-            .map(|m| Mod {
-                id: m.id,
-                name: m.name,
-                note: m.note,
-                on: ini_get(&settings, &format!("{}.enabled", m.id)).map_or(m.on, |v| v != 0.0),
-                lua: m.lua,
-                settings: m.settings,
-            })
-            .collect(),
+        mods: {
+            let user = user_scripts();
+            let mut list: Vec<Mod> = mods_def()
+                .iter()
+                .filter(|m| !user.iter().any(|(_, h)| h.0 == m.id))
+                .map(|m| Mod {
+                    id: m.id.into(),
+                    name: m.name.into(),
+                    note: m.note.into(),
+                    on: ini_get(&settings, &format!("{}.enabled", m.id)).map_or(m.on, |v| v != 0.0),
+                    lua: m.lua,
+                    settings: m.settings,
+                    user: false,
+                })
+                .collect();
+            list.extend(user.into_iter().map(|(_, (id, name, note, on, has))| Mod {
+                on: ini_get(&settings, &format!("{id}.enabled")).map_or(on, |v| v != 0.0),
+                id, name, note, lua: true, settings: has, user: true,
+            }));
+            list
+        },
     }
 }
 
@@ -280,10 +326,42 @@ fn state() -> State {
 // ponytail: a running game writes its own settings back over this. Tell the mod instead once the two can talk
 #[tauri::command]
 fn set_mod(id: String, on: bool) -> Result<(), String> {
-    if !mods_def().iter().any(|m| m.id == id) {
+    if !mods_def().iter().any(|m| m.id == id) && !user_scripts().iter().any(|(_, h)| h.0 == id) {
         return Err("No such mod".into());
     }
     save(&format!("{id}.enabled"), on as u8 as f32)
+}
+
+/// Adds a Lua mod file to the scripts folder, under its id, for the next start of the game
+#[tauri::command]
+fn add_mod_file(path: String) -> Result<String, String> {
+    let path = PathBuf::from(path);
+    if path.extension().is_none_or(|x| x != "lua") {
+        return Err("A mod is a .lua file".into());
+    }
+    let text = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    let (id, name, ..) = script_header(&text).ok_or("That file has no \"--@ id\" line, so it isn't a Talaz mod")?;
+    if !id.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') {
+        return Err("The mod's id can only have letters, digits, - and _".into());
+    }
+    let dir = scripts_dir().ok_or("No home folder")?;
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    std::fs::write(dir.join(format!("{id}.lua")), text).map_err(|e| e.to_string())?;
+    Ok(name)
+}
+
+/// Moves a mod the player added to the trash
+#[tauri::command]
+fn remove_mod_file(id: String) -> Result<(), String> {
+    let (file, _) = user_scripts().into_iter().find(|(_, h)| h.0 == id).ok_or("Only mods you added can be deleted")?;
+    instances::trash(&file)
+}
+
+#[tauri::command]
+fn open_scripts_folder() -> Result<(), String> {
+    let dir = scripts_dir().ok_or("No home folder")?;
+    std::fs::create_dir_all(&dir).map_err(|err| err.to_string())?;
+    runtime::system(if cfg!(target_os = "macos") { "open" } else if cfg!(windows) { "explorer" } else { "xdg-open" }).arg(dir).spawn().map(drop).map_err(|err| err.to_string())
 }
 
 fn save(key: &str, value: f32) -> Result<(), String> {
@@ -795,7 +873,7 @@ fn main() {
             update(app.handle().clone());
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![state, play, set_mod, remove, notes, warning, faster_graphics, open_game_folder, open_store, pick_folder, finish_setup, play::available, play::sign_in, play::sign_out, play::install, packs::packs, packs::set_pack, packs::import_pack, packs::remove_pack, curseforge::browse, curseforge::install_pack, curseforge::open_page, curseforge::pack_details, instances::instances, instances::select_instance, instances::create_instance, instances::update_instance, instances::delete_instance, instances::worlds, instances::delete_world, instances::open_world, instances::logs, instances::read_log, instances::delete_log, stop_game])
+        .invoke_handler(tauri::generate_handler![state, play, set_mod, add_mod_file, remove_mod_file, open_scripts_folder, remove, notes, warning, faster_graphics, open_game_folder, open_store, pick_folder, finish_setup, play::available, play::sign_in, play::sign_out, play::install, packs::packs, packs::set_pack, packs::import_pack, packs::remove_pack, curseforge::browse, curseforge::install_pack, curseforge::open_page, curseforge::pack_details, instances::instances, instances::select_instance, instances::create_instance, instances::update_instance, instances::delete_instance, instances::worlds, instances::delete_world, instances::open_world, instances::logs, instances::read_log, instances::delete_log, stop_game])
         .run(tauri::generate_context!())
         .expect("failed to start Talaz");
 }
@@ -846,6 +924,13 @@ mod tests {
         assert!(mods.iter().any(|m| m.id == "riptide" && m.on && m.name == "Riptide" && !m.lua));
         assert!(mods.iter().any(|m| m.id == "zoom" && !m.on && m.lua && m.settings));
         assert!(mods.iter().any(|m| m.id == "fps" && m.lua && !m.settings));
+    }
+
+    #[test]
+    fn a_lua_mods_header_reads_without_running_it() {
+        let h = super::script_header("--@ id dps\n--@ name DPS\n--@ note Damage per second\n--@ switch dps.big|Big|0\nlocal x = 1\n").unwrap();
+        assert_eq!(h, ("dps".into(), "DPS".into(), "Damage per second".into(), false, true));
+        assert!(super::script_header("print('no header')").is_none());
     }
 
     #[test]

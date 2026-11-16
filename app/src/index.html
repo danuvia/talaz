@@ -290,7 +290,7 @@ h1 { font-size: 84px; line-height: 1; letter-spacing: -4px; margin: 10px 0 30px 
 .chips button:hover { border-color: #3a4c58; }
 .chips button.on { background: var(--accent); border-color: var(--accent); color: var(--deep); }
 .mbar #find { width: 220px; height: 36px; margin-bottom: 0; border-radius: var(--r-m); }
-.mcards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+.mcards { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 14px; }
 .mcard { display: flex; flex-direction: column; gap: 14px; min-height: 148px; padding: 18px; border: 1px solid var(--line); border-radius: var(--r-l); background: var(--ink); color: var(--text); text-align: left; transition: border-color 0.25s, background 0.25s, transform 0.25s var(--ease), opacity 0.25s; }
 .mcard:hover { border-color: #3a4c58; transform: translateY(-2px); }
 .mcard:active { transform: scale(0.985); }
@@ -305,6 +305,18 @@ h1 { font-size: 84px; line-height: 1; letter-spacing: -4px; margin: 10px 0 30px 
 .mname { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
 .mname strong { font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mname small { color: var(--muted); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mfoot { display: flex; align-items: center; gap: 10px; margin-top: auto; font-size: 12px; }
+.mmore { flex: none; align-self: flex-start; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; width: 28px; height: 28px; border: 0; border-radius: var(--r-s); background: none; }
+.mmore i { width: 3.5px; height: 3.5px; border-radius: 50%; background: var(--muted); }
+.mmore:hover { background: #1f2a33; }
+.mmore:hover i { background: var(--text); }
+#mmenu { position: fixed; z-index: 30; min-width: 190px; padding: 6px; border: 1px solid var(--line); border-radius: var(--r-m); background: #121a20; box-shadow: 0 18px 40px -12px rgba(0, 0, 0, 0.6); }
+#mmenu p { margin: 4px 10px 8px; color: var(--muted); font-size: 12.5px; }
+#mmenu hr { margin: 6px 4px; border: 0; border-top: 1px solid var(--line); }
+#mmenu button { display: flex; align-items: center; gap: 10px; width: 100%; height: 36px; padding: 0 10px; border: 0; border-radius: var(--r-s); background: none; color: var(--text); text-align: left; }
+#mmenu button:hover, #mmenu button:focus-visible { background: #1d2830; outline: none; }
+#mmenu button .ic { width: 17px; height: 17px; }
+#mmenu .danger { color: #e5736b; }
 .mstate { align-self: flex-start; padding: 3px 9px; border-radius: 999px; background: #1a2530; color: var(--muted); font-size: 11.5px; font-weight: 500; }
 .mcard.on .mstate { background: var(--water); color: var(--accent); }
 .mnote { color: var(--muted); font-size: 13px; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
@@ -506,7 +518,8 @@ talaz
 </div>
 
 <div class="panel" id="tab-mods">
-<div class="logbar stick mbar"><div class="chips" id="md-cat"><button class="on" data-cat="">All</button><button data-cat="HUD">HUD</button><button data-cat="Visual">Visual</button><button data-cat="Gameplay">Gameplay</button><button data-cat="Performance">Performance</button><button data-cat="lua">Lua</button><button data-cat="builtin">Built in</button></div><span class="grow"></span><select id="md-show" aria-label="Show"><option value="all">All mods</option><option value="on">On only</option><option value="off">Off only</option></select><input id="find" type="search" placeholder="Search..." aria-label="Search mods"></div>
+<div class="logbar stick mbar"><div class="chips" id="md-cat"><button class="on" data-cat="">All</button><button data-cat="HUD">HUD</button><button data-cat="Visual">Visual</button><button data-cat="Gameplay">Gameplay</button><button data-cat="Performance">Performance</button><button data-cat="lua">Lua</button><button data-cat="builtin">Built in</button></div><span class="grow"></span><select id="md-show" aria-label="Show"><option value="all">All mods</option><option value="on">On only</option><option value="off">Off only</option></select><input id="find" type="search" placeholder="Search..." aria-label="Search mods"><button class="btn" id="mod-add">Add mod</button></div>
+<div id="mmenu" role="menu" hidden></div>
 <p class="hint" id="mods-hint"></p>
 <div class="mcards" id="mod-list"></div>
 </div>
@@ -721,7 +734,7 @@ const hours = (secs) => secs < 60 ? `${secs} s` : secs < 3600 ? `${Math.round(se
 const bytes = (n) => n >= 1 << 30 ? `${(n / (1 << 30)).toFixed(1)} GB` : n >= 1 << 20 ? `${(n / (1 << 20)).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
 const played = (inst) => (inst?.sessions ?? []).reduce((sum, [, secs]) => sum + secs, 0);
 const lastPlayed = (inst) => inst?.sessions?.at(-1)?.[0] ?? 0;
-const ICONS = { down: 'M10 3.5v10m-4.5-4L10 14l4.5-4.5M4.5 16.5h11', check: 'm4.5 10.5 3.5 3.5 7.5-8', out: 'M8 5h7v7M15 5 5.5 14.5', grid: 'M4 4h5v5H4zM11 4h5v5h-5zM4 11h5v5H4zM11 11h5v5h-5z', eye: 'M2.5 10s2.8-5 7.5-5 7.5 5 7.5 5-2.8 5-7.5 5-7.5-5-7.5-5zM10 12.2a2.2 2.2 0 1 0 0-4.4 2.2 2.2 0 0 0 0 4.4z', pointer: 'M5 3.5 15 9l-4.5 1.2L8.8 15z', bolt: 'M11 2.5 4.5 11H10l-1 6.5L15.5 9H10z' };
+const ICONS = { down: 'M10 3.5v10m-4.5-4L10 14l4.5-4.5M4.5 16.5h11', check: 'm4.5 10.5 3.5 3.5 7.5-8', out: 'M8 5h7v7M15 5 5.5 14.5', grid: 'M4 4h5v5H4zM11 4h5v5h-5zM4 11h5v5H4zM11 11h5v5h-5z', eye: 'M2.5 10s2.8-5 7.5-5 7.5 5 7.5 5-2.8 5-7.5 5-7.5-5-7.5-5zM10 12.2a2.2 2.2 0 1 0 0-4.4 2.2 2.2 0 0 0 0 4.4z', pointer: 'M5 3.5 15 9l-4.5 1.2L8.8 15z', bolt: 'M11 2.5 4.5 11H10l-1 6.5L15.5 9H10z', off: 'M5 5l10 10M15 5 5 15', folder: 'M3 6.5V15a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1h-6L8 5H4a1 1 0 0 0-1 1.5z', trash: 'M4 6h12M8 6V4h4v2M6 6l.8 10h6.4L14 6' };
 function icon(name) {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'), path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
   svg.setAttribute('viewBox', '0 0 20 20'); svg.setAttribute('aria-hidden', 'true'); svg.classList.add('ic');
@@ -839,21 +852,55 @@ function drawMods() {
   $('mod-list').replaceChildren(...list.map((mod) => {
     const category = CATEGORY[mod.id] ?? 'Other';
     const pic = mod.icon ? el('img', { className: 'mpic', src: mod.icon, alt: '' }) : el('span', { className: 'mpic blank' }, icon(CAT_ICON[category] ?? 'grid'));
-    const by = ['by Talaz', mod.lua ? 'Lua' : 'Built in', category, ...(mod.settings ? ['Settings in game'] : [])].join(' · ');
-    const card = el('button', { className: 'mcard' + (mod.on ? ' on' : ''), role: 'switch', disabled: busy, title: mod.on ? 'On. Click to turn it off' : 'Off. Click to turn it on' },
-      el('span', { className: 'mhead' }, pic, el('span', { className: 'mname' }, el('strong', {}, mod.name), el('small', {}, by)), el('span', { className: 'mstate' }, mod.on ? 'On' : 'Off')),
-      el('span', { className: 'mnote' }, mod.note));
+    const by = mod.user ? 'Added by you · Lua' : `by Talaz · ${mod.lua ? 'Lua' : 'Built in'}`;
+    const more = el('button', { className: 'mmore', title: 'More' }, el('i'), el('i'), el('i'));
+    more.setAttribute('aria-label', `More for ${mod.name}`);
+    more.setAttribute('aria-haspopup', 'menu');
+    const card = el('div', { className: 'mcard' + (mod.on ? ' on' : ''), role: 'switch', tabIndex: 0, title: mod.on ? 'On. Click to turn it off' : 'Off. Click to turn it on' },
+      el('span', { className: 'mhead' }, pic, el('span', { className: 'mname' }, el('strong', {}, mod.name), el('small', {}, by)), more),
+      el('span', { className: 'mnote' }, mod.note),
+      el('span', { className: 'mfoot' }, el('span', { className: 'mstate' }, mod.on ? 'On' : 'Off'), ...(mod.settings ? [el('span', { className: 'muted' }, 'Settings in game')] : [])));
     card.setAttribute('aria-checked', mod.on);
-    card.onclick = async () => {
+    const flip = async () => {
+      if (busy) return;
       mod.on = !mod.on;
       drawMods();
       try { await invoke('set_mod', { id: mod.id, on: mod.on }); } catch (err) { say(String(err)); refresh(); }
     };
+    card.onclick = flip;
+    card.onkeydown = (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); flip(); } };
+    more.onclick = (event) => { event.stopPropagation(); modMenu(mod, more, flip); };
     return card;
   }));
   if (!list.length) $('mod-list').replaceChildren(el('p', { className: 'muted' }, 'No mods match your search.'));
 }
 $('md-show').onchange = drawMods;
+// a mod's menu, after OneClient's: on or off, where its file is, and delete for the mods you added
+function modMenu(mod, anchor, flip) {
+  const menu = $('mmenu');
+  const item = (label, ic, act, cls = '') => { const b = el('button', { className: cls, role: 'menuitem' }, icon(ic), label); b.onclick = (e) => { e.stopPropagation(); menu.hidden = true; act(); }; return b; };
+  const items = [el('p', {}, mod.name), item(mod.on ? 'Turn off' : 'Turn on', mod.on ? 'off' : 'check', flip)];
+  if (mod.user) {
+    items.push(item('Show in folder', 'folder', () => invoke('open_scripts_folder').catch((err) => say(String(err)))));
+    items.push(el('hr'), item('Delete', 'trash', () => invoke('remove_mod_file', { id: mod.id }).then(() => { say(`${mod.name} was moved to the trash`); refresh(); }, (err) => say(String(err))), 'danger'));
+  }
+  menu.replaceChildren(...items);
+  const r = anchor.getBoundingClientRect();
+  menu.hidden = false;
+  menu.style.top = `${Math.min(r.bottom + 6, innerHeight - menu.offsetHeight - 12)}px`;
+  menu.style.left = `${Math.max(12, Math.min(r.right - menu.offsetWidth, innerWidth - menu.offsetWidth - 12))}px`;
+  menu.querySelector('button')?.focus();
+}
+document.addEventListener('click', (event) => { if (!$('mmenu').hidden && !event.target.closest('#mmenu')) $('mmenu').hidden = true; });
+document.addEventListener('keydown', (event) => { if (event.key === 'Escape') $('mmenu').hidden = true; });
+async function addMod(path) {
+  try { say(`${await invoke('add_mod_file', { path })} was added. It loads the next time the game starts`); } catch (err) { say(String(err)); }
+  refresh();
+}
+$('mod-add').onclick = async () => {
+  const path = await window.__TAURI__.dialog.open({ title: 'Pick a mod', filters: [{ name: 'Talaz mods', extensions: ['lua'] }] }).catch((err) => say(String(err)));
+  if (path) addMod(path);
+};
 for (const b of $('md-cat').children) b.onclick = () => { for (const x of $('md-cat').children) x.classList.toggle('on', x === b); drawMods(); };
 
 function drawVersions() {
@@ -1256,6 +1303,8 @@ $('pack-add').onclick = async () => {
   if (path) addPack(path);
 };
 listen('tauri://drag-drop', (event) => {
+  const mods = (event.payload.paths ?? []).filter((path) => /\.lua$/i.test(path));
+  if (mods.length) { openInstance(insts.selected, 'mods'); mods.forEach(addMod); }
   const files = (event.payload.paths ?? []).filter((path) => /\.(mcpack|mcaddon|zip)$/i.test(path));
   if (files.length) { openInstance(insts.selected, 'textures'); files.forEach(addPack); }
 });
