@@ -767,15 +767,31 @@ function show(page) {
 // from the speed it was let go at. A short slow drag comes back; a quick flick goes on
 let thumbDrag = null, swallowClick = false;
 const navTabs = () => [...document.querySelectorAll('nav button')];
-function thumbAt(x) {
-  // the width follows the tabs it sits between, so it grows and shrinks on the way
+// The thumb is drawn like jelly: pushed past either end it presses against the wall and
+// squashes instead of leaving the bar, and moving fast it stretches the way it goes
+function thumbAt(x, v = 0) {
   const tabs = navTabs(), first = tabs[0].offsetLeft, last = tabs[tabs.length - 1].offsetLeft;
-  const pos = Math.min(Math.max(x, first), last);
+  const pos = Math.min(Math.max(x, first), last), over = x - pos;
+  // the width follows the tabs it sits between, so it grows and shrinks on the way
   let i = 0;
   while (i < tabs.length - 2 && tabs[i + 1].offsetLeft <= pos) i++;
   const a = tabs[i], b = tabs[i + 1] ?? a, f = b === a ? 0 : (pos - a.offsetLeft) / (b.offsetLeft - a.offsetLeft);
-  thumb.style.width = `${a.offsetWidth + (b.offsetWidth - a.offsetWidth) * f}px`;
-  thumb.style.transform = `translateX(${x}px)`;
+  const w = a.offsetWidth + (b.offsetWidth - a.offsetWidth) * f;
+  let sx = 1, sy = 1, origin = 'center';
+  if (over) {
+    // the further it's pushed, the flatter it gets, slower and slower like a real squash
+    const squash = 0.45 * (1 - Math.exp(-Math.abs(over) / w * 2.2));
+    sx = 1 - squash;
+    sy = 1 + squash * 0.25;
+    origin = over < 0 ? 'left center' : 'right center';
+  } else if (v) {
+    const stretch = Math.min(Math.abs(v) * 0.12, 0.22);
+    sx = 1 + stretch;
+    sy = 1 - stretch * 0.4;
+  }
+  thumb.style.width = `${w}px`;
+  thumb.style.transformOrigin = origin;
+  thumb.style.transform = `translateX(${pos}px) scale(${sx}, ${sy})`;
   const near = tabs.reduce((best, t) => Math.abs(t.offsetLeft - pos) < Math.abs(best.offsetLeft - pos) ? t : best);
   for (const t of tabs) t.toggleAttribute('aria-current', t === near);
 }
@@ -790,15 +806,12 @@ document.addEventListener('pointermove', (event) => {
   const dx = event.clientX - d.x0;
   if (!d.moved && Math.abs(dx) < 4) return;
   if (!d.moved) { d.moved = true; thumb.style.transition = 'none'; document.querySelector('nav').setPointerCapture(d.id); }
-  const tabs = navTabs(), min = tabs[0].offsetLeft, max = tabs[tabs.length - 1].offsetLeft;
-  let x = d.from + dx;
-  // past either end it pulls back like rubber
-  if (x < min) x = min - (min - x) * 0.3;
-  if (x > max) x = max + (x - max) * 0.3;
-  d.x = x;
+  const x = d.from + dx;
   d.samples.push([performance.now(), x]);
   if (d.samples.length > 6) d.samples.shift();
-  thumbAt(x);
+  const [ta, xa] = d.samples[Math.max(0, d.samples.length - 3)], [tb, xb] = d.samples[d.samples.length - 1];
+  d.x = x;
+  thumbAt(x, tb > ta ? (xb - xa) / (tb - ta) : 0);
 });
 document.addEventListener('pointerup', (event) => {
   const d = thumbDrag;
@@ -808,7 +821,10 @@ document.addEventListener('pointerup', (event) => {
   swallowClick = true;
   // the speed over the last few moves, in pixels a millisecond
   const [t0, x0] = d.samples[0], [t1, x1] = d.samples[d.samples.length - 1];
-  const v = t1 > t0 ? (x1 - x0) / (t1 - t0) : 0;
+  let v = t1 > t0 ? (x1 - x0) / (t1 - t0) : 0;
+  // let go while squashed against an end: it springs back from the wall, not from past it
+  const first = navTabs()[0].offsetLeft, lastLeft = navTabs()[navTabs().length - 1].offsetLeft;
+  if (d.x < first || d.x > lastLeft) v = 0;
   // where a fling at that speed comes to rest, slowing by 1% each millisecond like a fast UIScrollView
   const rate = 0.99, rest = d.x + v * rate / (1 - rate);
   const tabs = navTabs(), to = tabs.reduce((best, t) => Math.abs(t.offsetLeft - rest) < Math.abs(best.offsetLeft - rest) ? t : best);
@@ -825,9 +841,10 @@ function springThumb(x, v, to) {
     const a = (target - x) * 320 - v * 1000 * 28;
     v += (a * dt) / 1000;
     x += v * 1000 * dt;
-    thumbAt(x);
+    thumbAt(x, v);
     if (Math.abs(target - x) > 0.3 || Math.abs(v) > 0.01) return requestAnimationFrame(step);
     thumb.style.transition = '';
+    thumb.style.transformOrigin = 'center';
     show(to.dataset.page);
   };
   requestAnimationFrame(step);
