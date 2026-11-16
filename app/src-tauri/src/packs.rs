@@ -208,7 +208,7 @@ fn safe_name(name: &str) -> String {
 }
 
 /// Unpacks a .mcpack, .mcaddon or .zip and puts each pack in it in its own folder of the
-/// right kind. Resource packs are turned on; the behavior packs wait for a world to use them
+/// right kind. A lone resource pack is turned on; an add-on waits for a world to use it
 pub fn install_file(path: &str) -> Result<Vec<(&'static str, String)>, String> {
     let file = std::fs::File::open(path).map_err(|e| e.to_string())?;
     let mut zip = zip::ZipArchive::new(file).map_err(|_| "That isn't a pack file")?;
@@ -242,8 +242,10 @@ pub fn install_file(path: &str) -> Result<Vec<(&'static str, String)>, String> {
     if placed.is_empty() {
         return Err(failed.unwrap_or_else(|| "No resource pack or add-on in it".to_string()));
     }
-    for (kind, folder) in &placed {
-        if *kind == "resource" {
+    // a pack on its own is turned on for every world; an add-on's resource pack goes with
+    // its behavior pack, which a world turns on in its own settings, together
+    if !placed.iter().any(|(k, _)| *k == "behavior") {
+        for (_, folder) in &placed {
             set_pack(folder.clone(), true)?;
         }
     }
@@ -255,7 +257,7 @@ pub fn install_file(path: &str) -> Result<Vec<(&'static str, String)>, String> {
 pub fn import_pack(path: String) -> Result<String, String> {
     let placed = install_file(&path)?;
     let behavior = placed.iter().filter(|(k, _)| *k == "behavior").count();
-    Ok(if behavior > 0 { "The add-on was added. Turn its behavior pack on in a world's settings".into() } else { "The pack was added and turned on".into() })
+    Ok(if behavior > 0 { "The add-on was added. Turn it on in a world's settings, under Behavior packs".into() } else { "The pack was added and turned on".into() })
 }
 
 #[tauri::command]
