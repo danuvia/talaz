@@ -283,6 +283,9 @@ h1 { font-size: 84px; line-height: 1; letter-spacing: -4px; margin: 10px 0 30px 
 .prow { padding-top: 10px; padding-bottom: 10px; }
 .prow > .picon { flex: none; width: 72px; height: 72px; border-radius: 16px; object-fit: cover; image-rendering: pixelated; background: #0e151b; }
 .prow > .picon.blank { display: grid; place-items: center; color: var(--muted); }
+.prow > .mico { width: 56px; height: 56px; border-radius: 14px; transition: background 0.25s, color 0.25s; }
+.prow > .mico.on { background: var(--water); color: var(--accent); }
+.prow > .mico svg { width: 24px; height: 24px; }
 .per-world { flex: none; padding: 0 8px; font-size: 12.5px; white-space: nowrap; }
 .prow > div { flex: 1; min-width: 0; }
 .ptags { display: flex; gap: 8px; align-items: center; font-size: 11.5px; }
@@ -481,9 +484,9 @@ talaz
 </div>
 
 <div class="panel" id="tab-mods">
-<p class="hint" id="mods-hint">Pick what the game starts with. Right click a mod to change its setting. Everything else is in the game, behind Right Shift.</p>
-<input id="find" type="search" placeholder="Search mods" aria-label="Search mods">
-<div class="tiles" id="tiles"></div>
+<div class="logbar stick"><input id="find" type="search" placeholder="Search mods" aria-label="Search mods"><div class="seg" id="md-cat" role="tablist"><button class="on" data-cat="">All</button><button data-cat="HUD">HUD</button><button data-cat="Visual">Visual</button><button data-cat="Gameplay">Gameplay</button><button data-cat="Performance">Performance</button></div><select id="md-show" aria-label="Show"><option value="all">All mods</option><option value="on">On only</option><option value="off">Off only</option></select></div>
+<p class="hint" id="mods-hint"></p>
+<div class="list tall" id="mod-list"></div>
 </div>
 
 <div class="panel" id="tab-textures">
@@ -696,7 +699,7 @@ const hours = (secs) => secs < 60 ? `${secs} s` : secs < 3600 ? `${Math.round(se
 const bytes = (n) => n >= 1 << 30 ? `${(n / (1 << 30)).toFixed(1)} GB` : n >= 1 << 20 ? `${(n / (1 << 20)).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
 const played = (inst) => (inst?.sessions ?? []).reduce((sum, [, secs]) => sum + secs, 0);
 const lastPlayed = (inst) => inst?.sessions?.at(-1)?.[0] ?? 0;
-const ICONS = { down: 'M10 3.5v10m-4.5-4L10 14l4.5-4.5M4.5 16.5h11', check: 'm4.5 10.5 3.5 3.5 7.5-8', out: 'M8 5h7v7M15 5 5.5 14.5' };
+const ICONS = { down: 'M10 3.5v10m-4.5-4L10 14l4.5-4.5M4.5 16.5h11', check: 'm4.5 10.5 3.5 3.5 7.5-8', out: 'M8 5h7v7M15 5 5.5 14.5', grid: 'M4 4h5v5H4zM11 4h5v5h-5zM4 11h5v5H4zM11 11h5v5h-5z', eye: 'M2.5 10s2.8-5 7.5-5 7.5 5 7.5 5-2.8 5-7.5 5-7.5-5-7.5-5zM10 12.2a2.2 2.2 0 1 0 0-4.4 2.2 2.2 0 0 0 0 4.4z', pointer: 'M5 3.5 15 9l-4.5 1.2L8.8 15z', bolt: 'M11 2.5 4.5 11H10l-1 6.5L15.5 9H10z' };
 function icon(name) {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'), path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
   svg.setAttribute('viewBox', '0 0 20 20'); svg.setAttribute('aria-hidden', 'true'); svg.classList.add('ic');
@@ -793,43 +796,41 @@ function versionOf(inst) {
   return names[0] ?? '';
 }
 
+// the mods, after OneClient's content list: search, a category, on or off. Their settings
+// are in the game, behind Right Shift, where they can be seen working
 function drawMods() {
+  const CATEGORY = { fps: 'HUD', cps: 'HUD', keystrokes: 'HUD', clock: 'HUD', session: 'HUD', coordinates: 'HUD', helditem: 'HUD', zoom: 'Visual', nightvision: 'Visual', food: 'Gameplay', mousetweaks: 'Gameplay', togglesprint: 'Gameplay', riptide: 'Performance', fpslimit: 'Performance' };
+  const CAT_ICON = { HUD: 'grid', Visual: 'eye', Gameplay: 'pointer', Performance: 'bolt' };
   const inst = current();
   const basic = !state.windows && !inst?.vanilla && versionOf(inst) && !fullMods(versionOf(inst));
   $('mods-hint').textContent = inst?.vanilla ? 'This instance is vanilla, so it starts without mods. Make a Talaz instance to use them.'
-    : 'Pick what the game starts with. Right click a mod to change its setting. Everything else is in the game, behind Right Shift.' + (basic ? ` On ${versionOf(inst)}, Food, the Mouse Tweaks wheel and Night Vision don't work yet.` : '');
-  $('tiles').hidden = $('find').hidden = !!inst?.vanilla;
-  // made once, then only switched, so the water moves instead of jumping
-  if (!$('tiles').children.length) {
-    for (const { id, name, note } of state.mods) {
-      const tile = el('button', { className: 'tile', role: 'switch', id: `mod-${id}` }, el('strong', {}, name), el('small', {}, note), el('em'), water());
-      tile.onclick = async () => {
-        const mod = state.mods.find((mod) => mod.id === id);
-        mod.on = !mod.on;
-        if (mod.on && waters.has(tile)) Object.assign(waters.get(tile), { cover: 0, level: 0.9, vel: 0 });
-        draw();
-        try { await invoke('set_mod', { id, on: mod.on }); } catch (err) { say(String(err)); refresh(); }
-      };
-      // a right click steps through the mod's setting
-      tile.oncontextmenu = async (event) => {
-        event.preventDefault();
-        const option = state.mods.find((mod) => mod.id === id).option;
-        if (!option) return;
-        option.value = option.choices[(option.choices.indexOf(option.value) + 1) % option.choices.length];
-        draw();
-        try { await invoke('set_option', { key: option.key, value: option.value }); } catch (err) { say(String(err)); refresh(); }
-      };
-      if (state.mods.find((mod) => mod.id === id).option) tile.title = 'Right click to change the setting';
-      $('tiles').append(tile);
-    }
-  }
-  for (const mod of state.mods) {
-    const tile = $(`mod-${mod.id}`);
-    if (!tile) continue;
-    tile.setAttribute('aria-checked', mod.on);
-    tile.querySelector('em').textContent = (mod.on ? 'On' : 'Off') + (mod.option ? ` · ${mod.option.value}${mod.option.unit}` : '');
-  }
+    : 'Turn on what the game starts with. Each mod\'s settings are in the game: press Right Shift in a world.' + (basic ? ` On ${versionOf(inst)}, Food, the Mouse Tweaks wheel and Night Vision don't work yet.` : '');
+  $('mod-list').hidden = document.querySelector('#tab-mods .logbar').hidden = !!inst?.vanilla;
+  const find = $('find').value.trim().toLowerCase(), cat = document.querySelector('#md-cat .on').dataset.cat, showing = $('md-show').value;
+  const list = state.mods
+    .filter((m) => !find || `${m.name} ${m.note}`.toLowerCase().includes(find))
+    .filter((m) => !cat || CATEGORY[m.id] === cat)
+    .filter((m) => showing === 'all' || (showing === 'on') === m.on)
+    .sort((a, b) => a.name.localeCompare(b.name));
+  $('mod-list').replaceChildren(...list.map((mod) => {
+    const toggle = el('button', { className: 'btn' + (mod.on ? ' on' : ''), textContent: mod.on ? 'On' : 'Off', role: 'switch', disabled: busy });
+    toggle.setAttribute('aria-checked', mod.on);
+    toggle.setAttribute('aria-label', `${mod.name}: ${mod.on ? 'on' : 'off'}`);
+    toggle.onclick = async () => {
+      mod.on = !mod.on;
+      drawMods();
+      try { await invoke('set_mod', { id: mod.id, on: mod.on }); } catch (err) { say(String(err)); refresh(); }
+    };
+    const category = CATEGORY[mod.id] ?? 'Other';
+    const tags = [el('span', { className: 'tag plain' }, category), el('span', { className: 'tag' + (mod.lua ? '' : ' plain') }, mod.lua ? 'Lua' : 'Built in')];
+    if (mod.settings) tags.push(el('span', { className: 'muted' }, 'Settings in game'));
+    const tile = el('span', { className: 'picon blank mico' + (mod.on ? ' on' : '') }, icon(CAT_ICON[category] ?? 'grid'));
+    return el('div', { className: 'row prow' }, tile, el('div', {}, mod.name, el('small', { className: 'note' }, mod.note), el('span', { className: 'ptags' }, ...tags)), toggle);
+  }));
+  if (!list.length) $('mod-list').replaceChildren(el('div', { className: 'row muted' }, 'No mods match your search.'));
 }
+$('md-show').onchange = drawMods;
+for (const b of $('md-cat').children) b.onclick = () => { for (const x of $('md-cat').children) x.classList.toggle('on', x === b); drawMods(); };
 
 function drawVersions() {
   const names = installedNames();
@@ -1275,10 +1276,7 @@ $('sign').onclick = () => (state.email ? run('Signed out', () => invoke('sign_ou
 $('size').append(...SIZES.map((size) => new Option(size.replace('x', ' × '), size)));
 $('size').value = SIZES.includes(localStorage.getItem('size')) ? localStorage.getItem('size') : SIZES[0];
 $('size').onchange = () => { localStorage.setItem('size', $('size').value); draw(); };
-$('find').oninput = () => {
-  const want = $('find').value.trim().toLowerCase();
-  for (const tile of $('tiles').children) tile.hidden = !tile.textContent.toLowerCase().includes(want);
-};
+$('find').oninput = drawMods;
 // a known problem with the picked version, shown above the title
 async function warn() {
   const name = versionOf(current()), text = name && await invoke('warning', { version: name }).catch(() => null);
@@ -1472,53 +1470,6 @@ $('setup-done').onclick = async () => {
   await refresh();
   if (localStorage.getItem('tour') !== 'done') tour(0);
 };
-
-// The water in a mod tile is drawn every frame: a spring moves its level, so it
-// sloshes and settles, and turning a mod on sends a wave in from the right
-const waters = new Map();
-function water() {
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.classList.add('water');
-  svg.setAttribute('aria-hidden', 'true');
-  svg.append(document.createElementNS('http://www.w3.org/2000/svg', 'path'));
-  return svg;
-}
-let lastFrame = performance.now();
-function flow(now) {
-  const dt = Math.min((now - lastFrame) / 1000, 0.05), t = now / 1000;
-  lastFrame = now;
-  // the water keeps moving while the Mods page is away, only the drawing waits
-  const shown = $('inst').classList.contains('on') && $('tab-mods').classList.contains('on');
-  if (!shown) return requestAnimationFrame(flow);
-  for (const tile of document.querySelectorAll('.tile')) {
-    const on = tile.getAttribute('aria-checked') === 'true', svg = tile.querySelector('.water');
-    if (!waters.has(tile)) waters.set(tile, { cover: 1, level: on ? 0.34 : -0.2, vel: 0, seed: Math.random() * 9 });
-    const w = waters.get(tile), W = tile.clientWidth, H = tile.clientHeight;
-    if (shown && (tile.hidden || !W)) continue;
-    if (w.cover < 1) w.cover = Math.min(1, w.cover + dt / 0.45);
-    const target = !on ? -0.2 : w.cover < 1 ? 1 : 0.34;
-    w.vel += ((target - w.level) * 60 - w.vel * 8) * dt;
-    w.level += w.vel * dt;
-    const path = svg.firstChild;
-    if (!shown) continue;
-    if (!on && w.level < -0.08) { path.removeAttribute('d'); continue; }
-    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
-    // a calm surface ripples a little; a moving one swells with its speed
-    const amp = 2.5 + Math.min(12, Math.abs(w.vel) * 16);
-    const top = (x) => H * (1 - w.level) + amp * Math.sin(x * 0.04 + t * 2.4 + w.seed) + amp * 0.45 * Math.sin(x * 0.09 - t * 3.3);
-    const x0 = W * Math.pow(1 - w.cover, 3);
-    let d = `M${W} ${H}L${x0} ${H}`;
-    if (w.cover < 1) {
-      // the wave's front curls forward at the top
-      const y0 = top(x0);
-      for (let y = H; y > y0; y -= 6) d += `L${x0 - 18 * Math.pow((H - y) / (H - y0), 2) - 4 * Math.sin(y * 0.15 + t * 10)} ${y}`;
-    }
-    for (let x = x0; x < W; x += 6) d += `L${x} ${top(x)}`;
-    path.setAttribute('d', d + `L${W} ${top(W)}Z`);
-  }
-  requestAnimationFrame(flow);
-}
-requestAnimationFrame(flow);
 
 // the window moves from any empty spot. Moved by hand: macOS drops startDragging when the call lands after the click
 let drag = null;

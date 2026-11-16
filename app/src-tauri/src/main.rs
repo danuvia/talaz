@@ -134,20 +134,13 @@ struct DefMod {
     name: &'static str,
     note: &'static str,
     on: bool,
+    /// a Lua mod from mod/scripts, or one built into the library
+    lua: bool,
+    /// whether it has settings, which are changed in the game
+    settings: bool,
 }
 
-/// A mod's slider; the launcher shows a mod's first one
-struct DefSlider {
-    mod_id: &'static str,
-    key: &'static str,
-    unit: &'static str,
-    min: f32,
-    max: f32,
-    step: f32,
-    default: f32,
-}
-
-/// The arguments of a MOD(...) or SLIDER(...) line, quotes taken off
+/// The arguments of a MOD(...) line, quotes taken off
 fn def_args(line: &'static str) -> Vec<&'static str> {
     let inner = line.split_once('(').and_then(|(_, rest)| rest.rsplit_once(')')).map_or("", |(inner, _)| inner);
     let (mut out, mut start, mut quoted) = (Vec::new(), 0, false);
@@ -165,22 +158,24 @@ fn def_args(line: &'static str) -> Vec<&'static str> {
     out
 }
 
-fn mods_def() -> &'static (Vec<DefMod>, Vec<DefSlider>) {
-    static DEF: std::sync::OnceLock<(Vec<DefMod>, Vec<DefSlider>)> = std::sync::OnceLock::new();
+/// Every mod: the built-in ones from mods.def, then the Lua mods from their header lines
+fn mods_def() -> &'static Vec<DefMod> {
+    static DEF: std::sync::OnceLock<Vec<DefMod>> = std::sync::OnceLock::new();
     DEF.get_or_init(|| {
-        let (mut mods, mut sliders) = (Vec::new(), Vec::new());
-        let num = |v: &str| v.parse::<f32>().unwrap_or(0.0);
+        let mut mods: Vec<DefMod> = Vec::new();
         for line in MODS_DEF.lines().map(str::trim) {
             let a = def_args(line);
             // GAMEMOD: needs hooks in the game, which Windows has none of yet
             if (line.starts_with("MOD(") || (line.starts_with("GAMEMOD(") && !cfg!(windows))) && a.len() == 4 {
-                mods.push(DefMod { id: a[0], name: a[1], note: a[2], on: a[3] != "0" });
-            } else if line.starts_with("SLIDER(") && a.len() == 8 {
-                sliders.push(DefSlider { mod_id: a[0], key: a[2], unit: a[3], min: num(a[4]), max: num(a[5]), step: num(a[6]), default: num(a[7]) });
+                mods.push(DefMod { id: a[0], name: a[1], note: a[2], on: a[3] != "0", lua: false, settings: false });
+            } else if line.starts_with("SLIDER(") || line.starts_with("SWITCH(") {
+                if let Some(m) = mods.iter_mut().find(|m| a.first() == Some(&m.id)) {
+                    m.settings = true;
+                }
             }
         }
-        // the Lua mods: "--@ id zoom", "--@ slider key|name|unit|min|max|step|first", and so on.
-        // One that needs a hook leaves Windows out, which has none yet
+        // "--@ id zoom", "--@ slider ...", and so on. One that needs a hook leaves Windows
+        // out, which has none yet
         let mut current: Option<DefMod> = None;
         let mut needs = false;
         let finish = |m: Option<DefMod>, needs: bool, mods: &mut Vec<DefMod>| {
@@ -196,39 +191,18 @@ fn mods_def() -> &'static (Vec<DefMod>, Vec<DefSlider>) {
             }
             let Some((word, rest)) = line.strip_prefix("--@ ").map(|l| l.split_once(' ').unwrap_or((l, ""))) else { continue };
             match word {
-                "id" => current = Some(DefMod { id: rest, name: rest, note: "", on: false }),
+                "id" => current = Some(DefMod { id: rest, name: rest, note: "", on: false, lua: true, settings: false }),
                 "name" => if let Some(m) = &mut current { m.name = rest },
                 "note" => if let Some(m) = &mut current { m.note = rest },
                 "on" => if let Some(m) = &mut current { m.on = rest == "1" },
                 "needs" => needs = true,
-                "slider" => {
-                    let p: Vec<&'static str> = rest.split('|').collect();
-                    if let (Some(m), 7) = (&current, p.len()) {
-                        sliders.push(DefSlider { mod_id: m.id, key: p[0], unit: p[2], min: num(p[3]), max: num(p[4]), step: num(p[5]), default: num(p[6]) });
-                    }
-                }
+                "slider" | "switch" => if let Some(m) = &mut current { m.settings = true },
                 _ => {}
             }
         }
         finish(current.take(), needs, &mut mods);
-        (mods, sliders)
+        mods
     })
-}
-
-impl DefSlider {
-    /// The values a right click on the tile steps through: five across the range, and the default
-    fn choices(&self) -> Vec<f32> {
-        let snap = |v: f32| ((v - self.min) / self.step).round() * self.step + self.min;
-        let mut out: Vec<f32> = (0..5).map(|i| snap(self.min + (self.max - self.min) * i as f32 / 4.0)).chain([self.default]).collect();
-        out.sort_by(f32::total_cmp);
-        out.dedup();
-        out
-    }
-
-    fn allows(&self, value: f32) -> bool {
-        let steps = (value - self.min) / self.step;
-        value >= self.min && value <= self.max && (steps - steps.round()).abs() < 1e-3
-    }
 }
 
 /// The file the mod keeps the active profile's settings in, next to its library
@@ -255,15 +229,8 @@ struct Mod {
     name: &'static str,
     note: &'static str,
     on: bool,
-    option: Option<Opt>,
-}
-
-#[derive(serde::Serialize)]
-struct Opt {
-    key: &'static str,
-    unit: &'static str,
-    value: f32,
-    choices: Vec<f32>,
+    lua: bool,
+    settings: bool,
 }
 
 #[derive(serde::Serialize)]
@@ -296,14 +263,14 @@ fn state() -> State {
         // ponytail: the game hooks are written for 1.21.114.1 on arm64 only; add versions and x86_64 here as they get their own
         full_mods: if cfg!(all(target_os = "macos", target_arch = "aarch64")) { vec!["1.21.114.1"] } else { vec![] },
         mods: mods_def()
-            .0
             .iter()
             .map(|m| Mod {
                 id: m.id,
                 name: m.name,
                 note: m.note,
                 on: ini_get(&settings, &format!("{}.enabled", m.id)).map_or(m.on, |v| v != 0.0),
-                option: mods_def().1.iter().find(|s| s.mod_id == m.id).map(|s| Opt { key: s.key, unit: s.unit, value: ini_get(&settings, s.key).unwrap_or(s.default), choices: s.choices() }),
+                lua: m.lua,
+                settings: m.settings,
             })
             .collect(),
     }
@@ -313,19 +280,10 @@ fn state() -> State {
 // ponytail: a running game writes its own settings back over this. Tell the mod instead once the two can talk
 #[tauri::command]
 fn set_mod(id: String, on: bool) -> Result<(), String> {
-    if !mods_def().0.iter().any(|m| m.id == id) {
+    if !mods_def().iter().any(|m| m.id == id) {
         return Err("No such mod".into());
     }
     save(&format!("{id}.enabled"), on as u8 as f32)
-}
-
-/// Changes a mod's setting for the next start of the game
-#[tauri::command]
-fn set_option(key: String, value: f32) -> Result<(), String> {
-    if !mods_def().1.iter().any(|s| s.key == key && s.allows(value)) {
-        return Err("No such setting".into());
-    }
-    save(&key, value)
 }
 
 fn save(key: &str, value: f32) -> Result<(), String> {
@@ -837,7 +795,7 @@ fn main() {
             update(app.handle().clone());
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![state, play, set_mod, set_option, remove, notes, warning, faster_graphics, open_game_folder, open_store, pick_folder, finish_setup, play::available, play::sign_in, play::sign_out, play::install, packs::packs, packs::set_pack, packs::import_pack, packs::remove_pack, curseforge::browse, curseforge::install_pack, curseforge::open_page, curseforge::pack_details, instances::instances, instances::select_instance, instances::create_instance, instances::update_instance, instances::delete_instance, instances::worlds, instances::delete_world, instances::open_world, instances::logs, instances::read_log, instances::delete_log, stop_game])
+        .invoke_handler(tauri::generate_handler![state, play, set_mod, remove, notes, warning, faster_graphics, open_game_folder, open_store, pick_folder, finish_setup, play::available, play::sign_in, play::sign_out, play::install, packs::packs, packs::set_pack, packs::import_pack, packs::remove_pack, curseforge::browse, curseforge::install_pack, curseforge::open_page, curseforge::pack_details, instances::instances, instances::select_instance, instances::create_instance, instances::update_instance, instances::delete_instance, instances::worlds, instances::delete_world, instances::open_world, instances::logs, instances::read_log, instances::delete_log, stop_game])
         .run(tauri::generate_context!())
         .expect("failed to start Talaz");
 }
@@ -884,18 +842,10 @@ mod tests {
 
     #[test]
     fn the_mods_come_from_the_mods_own_list() {
-        let (mods, sliders) = super::mods_def();
-        assert!(mods.iter().any(|m| m.id == "riptide" && m.on && m.name == "Riptide"));
-        assert!(mods.iter().any(|m| m.id == "zoom" && !m.on));
-        let zoom = sliders.iter().find(|s| s.key == "zoom.factor").unwrap();
-        assert_eq!((zoom.unit, zoom.default), ("×", 4.0));
-        assert!(zoom.choices().contains(&4.0) && zoom.allows(5.5) && !zoom.allows(5.3));
-    }
-
-    #[test]
-    fn a_setting_outside_its_choices_is_refused() {
-        assert!(super::set_option("fpslimit.cap".into(), 0.0).is_err());
-        assert!(super::set_option("key.menu".into(), 60.0).is_err());
+        let mods = super::mods_def();
+        assert!(mods.iter().any(|m| m.id == "riptide" && m.on && m.name == "Riptide" && !m.lua));
+        assert!(mods.iter().any(|m| m.id == "zoom" && !m.on && m.lua && m.settings));
+        assert!(mods.iter().any(|m| m.id == "fps" && m.lua && !m.settings));
     }
 
     #[test]
