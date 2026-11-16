@@ -25,7 +25,8 @@ header { position: relative; z-index: 2; height: 64px; display: grid; grid-templ
 nav { position: relative; display: flex; padding: 4px; border: 1px solid var(--line); border-radius: 999px; background: rgba(23, 25, 28, 0.7); backdrop-filter: blur(12px); }
 nav button { position: relative; z-index: 1; height: 32px; padding: 0 18px; border-radius: 999px; color: var(--muted); transition: color 0.25s; }
 nav button[aria-current] { color: var(--deep); }
-nav i { position: absolute; top: 4px; left: 0; height: 32px; border-radius: 999px; background: var(--accent); transition: transform 0.45s var(--ease), width 0.45s var(--ease); }
+nav { touch-action: none; }
+nav i { position: absolute; top: 4px; left: 0; height: 32px; border-radius: 999px; cursor: grab; background: var(--accent); transition: transform 0.45s var(--ease), width 0.45s var(--ease); }
 #chip { justify-self: end; display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px 0 5px; border: 1px solid var(--line); border-radius: 999px; background: rgba(23, 25, 28, 0.7); max-width: 240px; transition: border-color 0.2s; }
 #chip:hover { border-color: var(--accent); }
 #chip b { flex: none; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--water); color: var(--accent); font-weight: 400; text-transform: uppercase; }
@@ -760,6 +761,76 @@ function show(page) {
   }
   for (const section of document.querySelectorAll('.page')) section.classList.toggle('on', section.id === page);
   document.body.dataset.page = page;
+}
+// The bar's thumb can be dragged too. Let go, it goes to the tab it would have reached had it
+// kept sliding and slowed down by itself (UIKit's projection of a fling), then springs there
+// from the speed it was let go at. A short slow drag comes back; a quick flick goes on
+let thumbDrag = null, swallowClick = false;
+const navTabs = () => [...document.querySelectorAll('nav button')];
+function thumbAt(x) {
+  // the width follows the tabs it sits between, so it grows and shrinks on the way
+  const tabs = navTabs(), first = tabs[0].offsetLeft, last = tabs[tabs.length - 1].offsetLeft;
+  const pos = Math.min(Math.max(x, first), last);
+  let i = 0;
+  while (i < tabs.length - 2 && tabs[i + 1].offsetLeft <= pos) i++;
+  const a = tabs[i], b = tabs[i + 1] ?? a, f = b === a ? 0 : (pos - a.offsetLeft) / (b.offsetLeft - a.offsetLeft);
+  thumb.style.width = `${a.offsetWidth + (b.offsetWidth - a.offsetWidth) * f}px`;
+  thumb.style.transform = `translateX(${x}px)`;
+  const near = tabs.reduce((best, t) => Math.abs(t.offsetLeft - pos) < Math.abs(best.offsetLeft - pos) ? t : best);
+  for (const t of tabs) t.toggleAttribute('aria-current', t === near);
+}
+document.querySelector('nav').addEventListener('pointerdown', (event) => {
+  if (event.button !== 0) return;
+  const now = new DOMMatrix(getComputedStyle(thumb).transform).m41;
+  thumbDrag = { id: event.pointerId, x0: event.clientX, from: now, x: now, moved: false, samples: [[performance.now(), now]] };
+});
+document.addEventListener('pointermove', (event) => {
+  const d = thumbDrag;
+  if (!d || event.pointerId !== d.id) return;
+  const dx = event.clientX - d.x0;
+  if (!d.moved && Math.abs(dx) < 4) return;
+  if (!d.moved) { d.moved = true; thumb.style.transition = 'none'; document.querySelector('nav').setPointerCapture(d.id); }
+  const tabs = navTabs(), min = tabs[0].offsetLeft, max = tabs[tabs.length - 1].offsetLeft;
+  let x = d.from + dx;
+  // past either end it pulls back like rubber
+  if (x < min) x = min - (min - x) * 0.3;
+  if (x > max) x = max + (x - max) * 0.3;
+  d.x = x;
+  d.samples.push([performance.now(), x]);
+  if (d.samples.length > 6) d.samples.shift();
+  thumbAt(x);
+});
+document.addEventListener('pointerup', (event) => {
+  const d = thumbDrag;
+  if (!d || event.pointerId !== d.id) return;
+  thumbDrag = null;
+  if (!d.moved) return;
+  swallowClick = true;
+  // the speed over the last few moves, in pixels a millisecond
+  const [t0, x0] = d.samples[0], [t1, x1] = d.samples[d.samples.length - 1];
+  const v = t1 > t0 ? (x1 - x0) / (t1 - t0) : 0;
+  // where a fling at that speed comes to rest, slowing by 1% each millisecond like a fast UIScrollView
+  const rate = 0.99, rest = d.x + v * rate / (1 - rate);
+  const tabs = navTabs(), to = tabs.reduce((best, t) => Math.abs(t.offsetLeft - rest) < Math.abs(best.offsetLeft - rest) ? t : best);
+  springThumb(d.x, v, to);
+});
+document.addEventListener('click', (event) => { if (swallowClick) { swallowClick = false; event.stopPropagation(); event.preventDefault(); } }, true);
+function springThumb(x, v, to) {
+  const target = to.offsetLeft;
+  let last = performance.now();
+  const step = (now) => {
+    const dt = Math.min((now - last) / 1000, 1 / 30);
+    last = now;
+    // a spring a little short of critically damped: one soft overshoot, then still
+    const a = (target - x) * 320 - v * 1000 * 28;
+    v += (a * dt) / 1000;
+    x += v * 1000 * dt;
+    thumbAt(x);
+    if (Math.abs(target - x) > 0.3 || Math.abs(v) > 0.01) return requestAnimationFrame(step);
+    thumb.style.transition = '';
+    show(to.dataset.page);
+  };
+  requestAnimationFrame(step);
 }
 document.addEventListener('click', (event) => {
   const page = event.target.closest('[data-page]')?.dataset.page;
@@ -1551,7 +1622,7 @@ const win = window.__TAURI__.window.getCurrentWindow();
 document.addEventListener('keydown', async (event) => event.key === 'Escape' && (await win.isFullscreen()) && win.setFullscreen(false));
 document.addEventListener('mousedown', async (event) => {
   // a window filling the screen stays put
-  if (event.button !== 0 || event.target.closest('button, select, input, a, pre, .tile, .row, .overlay')) return;
+  if (event.button !== 0 || event.target.closest('button, select, input, a, pre, .tile, .row, .overlay, nav')) return;
   const start = { x: event.screenX, y: event.screenY };
   drag = start;
   const [pos, scale, fullscreen] = await Promise.all([win.outerPosition(), win.scaleFactor(), win.isFullscreen()]);
