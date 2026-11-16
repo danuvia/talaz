@@ -780,9 +780,11 @@ function thumbAt(x, v = 0) {
   let sx = 1, sy = 1, origin = 'center';
   if (over) {
     // the further it's pushed, the flatter it gets, slower and slower like a real squash
-    const squash = 0.45 * (1 - Math.exp(-Math.abs(over) / w * 2.2));
+    // and it spreads up and down to fill the bar's inside, the way jelly pressed on a wall would:
+    // at its flattest it is the full 40px of the bar
+    const squash = 0.3 * (1 - Math.exp(-Math.abs(over) / w * 2.2));
     sx = 1 - squash;
-    sy = 1 + squash * 0.25;
+    sy = 1 + squash * 0.83;
     origin = over < 0 ? 'left center' : 'right center';
   } else if (v) {
     const stretch = Math.min(Math.abs(v) * 0.12, 0.22);
