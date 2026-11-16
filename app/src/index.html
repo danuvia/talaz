@@ -283,9 +283,31 @@ h1 { font-size: 84px; line-height: 1; letter-spacing: -4px; margin: 10px 0 30px 
 .prow { padding-top: 10px; padding-bottom: 10px; }
 .prow > .picon { flex: none; width: 72px; height: 72px; border-radius: 16px; object-fit: cover; image-rendering: pixelated; background: #0e151b; }
 .prow > .picon.blank { display: grid; place-items: center; color: var(--muted); }
-.prow > .mico { width: 56px; height: 56px; border-radius: 14px; transition: background 0.25s, color 0.25s; }
-.prow > .mico.on { background: var(--water); color: var(--accent); }
-.prow > .mico svg { width: 24px; height: 24px; }
+/* mods: OneClient's cards, four across, an off mod dimmed */
+.mbar { gap: 10px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chips button { height: 36px; padding: 0 14px; border: 1px solid var(--line); border-radius: var(--r-m); background: var(--ink); color: var(--text); font-weight: 500; transition: background 0.2s, border-color 0.2s, color 0.2s; }
+.chips button:hover { border-color: #3a4c58; }
+.chips button.on { background: var(--accent); border-color: var(--accent); color: var(--deep); }
+.mbar #find { width: 220px; }
+.mcards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+.mcard { display: flex; flex-direction: column; gap: 14px; min-height: 148px; padding: 18px; border: 1px solid var(--line); border-radius: var(--r-l); background: var(--ink); color: var(--text); text-align: left; transition: border-color 0.25s, background 0.25s, transform 0.25s var(--ease), opacity 0.25s; }
+.mcard:hover { border-color: #3a4c58; transform: translateY(-2px); }
+.mcard:active { transform: scale(0.985); }
+.mcard.on { border-color: rgba(79, 216, 196, 0.45); }
+.mcard:not(.on) { opacity: 0.5; }
+.mcard:not(.on):hover { opacity: 0.8; }
+.mhead { display: flex; align-items: center; gap: 12px; }
+.mpic { flex: none; width: 52px; height: 52px; border-radius: 12px; object-fit: cover; image-rendering: pixelated; }
+.mpic.blank { display: grid; place-items: center; background: #1a2530; color: var(--muted); }
+.mcard.on .mpic.blank { background: var(--water); color: var(--accent); }
+.mpic svg { width: 24px; height: 24px; }
+.mname { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
+.mname strong { font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mname small { color: var(--muted); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mstate { align-self: flex-start; padding: 3px 9px; border-radius: 999px; background: #1a2530; color: var(--muted); font-size: 11.5px; font-weight: 500; }
+.mcard.on .mstate { background: var(--water); color: var(--accent); }
+.mnote { color: var(--muted); font-size: 13px; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .per-world { flex: none; padding: 0 8px; font-size: 12.5px; white-space: nowrap; }
 .prow > div { flex: 1; min-width: 0; }
 .ptags { display: flex; gap: 8px; align-items: center; font-size: 11.5px; }
@@ -484,9 +506,9 @@ talaz
 </div>
 
 <div class="panel" id="tab-mods">
-<div class="logbar stick"><input id="find" type="search" placeholder="Search mods" aria-label="Search mods"><div class="seg" id="md-cat" role="tablist"><button class="on" data-cat="">All</button><button data-cat="HUD">HUD</button><button data-cat="Visual">Visual</button><button data-cat="Gameplay">Gameplay</button><button data-cat="Performance">Performance</button></div><select id="md-show" aria-label="Show"><option value="all">All mods</option><option value="on">On only</option><option value="off">Off only</option></select></div>
+<div class="logbar stick mbar"><div class="chips" id="md-cat"><button class="on" data-cat="">All</button><button data-cat="HUD">HUD</button><button data-cat="Visual">Visual</button><button data-cat="Gameplay">Gameplay</button><button data-cat="Performance">Performance</button><button data-cat="lua">Lua</button><button data-cat="builtin">Built in</button></div><span class="grow"></span><select id="md-show" aria-label="Show"><option value="all">All mods</option><option value="on">On only</option><option value="off">Off only</option></select><input id="find" type="search" placeholder="Search..." aria-label="Search mods"></div>
 <p class="hint" id="mods-hint"></p>
-<div class="list tall" id="mod-list"></div>
+<div class="mcards" id="mod-list"></div>
 </div>
 
 <div class="panel" id="tab-textures">
@@ -809,25 +831,27 @@ function drawMods() {
   const find = $('find').value.trim().toLowerCase(), cat = document.querySelector('#md-cat .on').dataset.cat, showing = $('md-show').value;
   const list = state.mods
     .filter((m) => !find || `${m.name} ${m.note}`.toLowerCase().includes(find))
-    .filter((m) => !cat || CATEGORY[m.id] === cat)
+    .filter((m) => !cat || (cat === 'lua' ? m.lua : cat === 'builtin' ? !m.lua : CATEGORY[m.id] === cat))
     .filter((m) => showing === 'all' || (showing === 'on') === m.on)
     .sort((a, b) => a.name.localeCompare(b.name));
+  // a card per mod, after OneClient's: its picture, name, who made it and what it is. A click
+  // turns it on or off, and an off mod is dimmed
   $('mod-list').replaceChildren(...list.map((mod) => {
-    const toggle = el('button', { className: 'btn' + (mod.on ? ' on' : ''), textContent: mod.on ? 'On' : 'Off', role: 'switch', disabled: busy });
-    toggle.setAttribute('aria-checked', mod.on);
-    toggle.setAttribute('aria-label', `${mod.name}: ${mod.on ? 'on' : 'off'}`);
-    toggle.onclick = async () => {
+    const category = CATEGORY[mod.id] ?? 'Other';
+    const pic = mod.icon ? el('img', { className: 'mpic', src: mod.icon, alt: '' }) : el('span', { className: 'mpic blank' }, icon(CAT_ICON[category] ?? 'grid'));
+    const by = ['by Talaz', mod.lua ? 'Lua' : 'Built in', category, ...(mod.settings ? ['Settings in game'] : [])].join(' · ');
+    const card = el('button', { className: 'mcard' + (mod.on ? ' on' : ''), role: 'switch', disabled: busy, title: mod.on ? 'On. Click to turn it off' : 'Off. Click to turn it on' },
+      el('span', { className: 'mhead' }, pic, el('span', { className: 'mname' }, el('strong', {}, mod.name), el('small', {}, by)), el('span', { className: 'mstate' }, mod.on ? 'On' : 'Off')),
+      el('span', { className: 'mnote' }, mod.note));
+    card.setAttribute('aria-checked', mod.on);
+    card.onclick = async () => {
       mod.on = !mod.on;
       drawMods();
       try { await invoke('set_mod', { id: mod.id, on: mod.on }); } catch (err) { say(String(err)); refresh(); }
     };
-    const category = CATEGORY[mod.id] ?? 'Other';
-    const tags = [el('span', { className: 'tag plain' }, category), el('span', { className: 'tag' + (mod.lua ? '' : ' plain') }, mod.lua ? 'Lua' : 'Built in')];
-    if (mod.settings) tags.push(el('span', { className: 'muted' }, 'Settings in game'));
-    const tile = el('span', { className: 'picon blank mico' + (mod.on ? ' on' : '') }, icon(CAT_ICON[category] ?? 'grid'));
-    return el('div', { className: 'row prow' }, tile, el('div', {}, mod.name, el('small', { className: 'note' }, mod.note), el('span', { className: 'ptags' }, ...tags)), toggle);
+    return card;
   }));
-  if (!list.length) $('mod-list').replaceChildren(el('div', { className: 'row muted' }, 'No mods match your search.'));
+  if (!list.length) $('mod-list').replaceChildren(el('p', { className: 'muted' }, 'No mods match your search.'));
 }
 $('md-show').onchange = drawMods;
 for (const b of $('md-cat').children) b.onclick = () => { for (const x of $('md-cat').children) x.classList.toggle('on', x === b); drawMods(); };
