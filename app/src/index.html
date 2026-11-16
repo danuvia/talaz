@@ -488,7 +488,7 @@ talaz
 
 <div class="panel" id="tab-textures">
 <div class="logbar stick"><div class="seg" role="tablist"><button class="on" data-packs="mine">Installed</button><button data-packs="browse">Browse</button></div><span class="grow"></span><button class="btn" id="pack-add">Add a file</button></div>
-<p class="hint" id="packs-hint">Resource packs that are on load in every world, the top one over the others. An add-on's behavior pack is turned on in a world's own settings. Drop a .mcpack or .mcaddon on the window to add it.</p>
+<p class="hint" id="packs-hint">Resource packs that are on load in every world, the top one over the others. Shader packs work the same way, made for your game version. An add-on's behavior pack is turned on in a world's own settings. Drop a .mcpack or .mcaddon on the window to add it.</p>
 <div id="mine">
 <div class="logbar"><input id="pk-find" type="search" placeholder="Search installed packs" aria-label="Search installed packs"><div class="seg" id="pk-src"><button class="on" data-src="all">All</button><button data-src="online">Online</button><button data-src="local">Local</button></div><select id="pk-show" aria-label="Show"><option value="all">All packs</option><option value="on">On only</option><option value="off">Off only</option><option value="addons">Add-ons only</option></select><select id="pk-sort" aria-label="Sort by"><option value="name">Name (A-Z)</option><option value="name-desc">Name (Z-A)</option><option value="added">Recently added</option><option value="size">Size (largest)</option></select></div>
 <div class="list tall" id="pack-list"></div>
@@ -1086,7 +1086,7 @@ function drawPackList() {
     remove.onclick = sure(remove, 'Delete it?', () => invoke('remove_pack', { folder: pack.folder, kind: pack.kind }).then(() => { say(`${pack.name} was deleted`); drawPacks(); }, (err) => say(String(err))));
     const icon = pack.icon ? el('img', { className: 'picon', src: pack.icon, alt: '' }) : el('span', { className: 'picon blank' }, pack.name.slice(0, 1).toUpperCase());
     const info = el('div', {}, pack.name, ...(pack.description ? [el('small', { className: 'note' }, pack.description)] : []),
-      el('span', { className: 'ptags' }, ...(addon ? [el('span', { className: 'tag' }, 'Add-on')] : []), el('span', { className: 'tag' + (pack.curseforge ? '' : ' plain') }, pack.curseforge ? 'CurseForge' : 'Local'), el('span', { className: 'muted' }, bytes(pack.size))));
+      el('span', { className: 'ptags' }, ...(addon ? [el('span', { className: 'tag' }, 'Add-on')] : []), ...(pack.shader ? [el('span', { className: 'tag', title: 'Built for one game version. If the game won\'t start, turn it off' }, 'Shader')] : []), el('span', { className: 'tag' + (pack.curseforge ? '' : ' plain') }, pack.curseforge ? 'CurseForge' : 'Local'), el('span', { className: 'muted' }, bytes(pack.size))));
     return el('div', { className: 'row prow' }, icon, info, toggle, remove);
   }));
   const none = packList.length ? 'No packs match your search.' : 'No packs yet. Browse CurseForge or drop a .mcpack or .mcaddon on the window.';

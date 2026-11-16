@@ -708,6 +708,8 @@ fn play(app: tauri::AppHandle, version: String, width: u32, height: u32) -> Resu
     // ponytail: a vanilla instance only skips the mod on Mac and Linux; Windows still injects it
     let vanilla = instances::selected().vanilla;
     let mods = place_mod()?;
+    // the shader packs that are on, for the mod's material loader; none for a vanilla game
+    let _ = std::fs::write(mods.join("shaders.txt"), if vanilla { String::new() } else { packs::shader_folders().join("\n") });
     let data = game_dir();
     let reach: Vec<&std::path::Path> = [Some(game.as_path()), data.as_deref(), Some(mods.as_path())].into_iter().flatten().collect();
     let mut cmd = runtime::command("mcpelauncher-client", &reach).ok_or("The game runtime is missing")?;

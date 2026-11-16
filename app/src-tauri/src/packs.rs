@@ -22,6 +22,27 @@ pub struct Pack {
     curseforge: Option<u64>,
     /// "resource", or "behavior" for an add-on's part a world turns on
     kind: &'static str,
+    /// a resource pack with its own renderer materials: a shader pack
+    shader: bool,
+}
+
+/// The material folders of the shader packs that are on, top pack first, for the mod to
+/// answer the game's materials from
+pub fn shader_folders() -> Vec<String> {
+    let Ok(mojang) = mojang() else { return Vec::new() };
+    let packs: Vec<(String, PathBuf)> = std::fs::read_dir(mojang.join("resource_packs"))
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter_map(|e| Some((header(&e.path())?["uuid"].as_str()?.to_string(), e.path())))
+        .collect();
+    global_list(&mojang)
+        .iter()
+        .filter_map(|entry| packs.iter().find(|(uuid, _)| entry["pack_id"] == uuid.as_str()))
+        .map(|(_, path)| path.join("renderer/materials"))
+        .filter(|dir| dir.is_dir())
+        .map(|dir| dir.to_string_lossy().to_string())
+        .collect()
 }
 
 /// The game's folder for each kind of pack
@@ -111,6 +132,7 @@ pub fn packs() -> Result<Vec<Pack>, String> {
                 added,
                 curseforge,
                 kind,
+                shader: kind == "resource" && path.join("renderer/materials").is_dir(),
                 name: plain(h["name"].as_str().unwrap_or(&folder)),
                 description: plain(h["description"].as_str().unwrap_or_default()),
                 on: kind == "resource" && on.contains(&uuid),
