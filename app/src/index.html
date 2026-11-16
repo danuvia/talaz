@@ -4,9 +4,13 @@
 <meta charset="utf-8">
 <title>Talaz</title>
 <style>
-@font-face { font-family: Poppins; src: url(Poppins-Regular.ttf); }
+@font-face { font-family: Poppins; font-weight: 400; src: url(Poppins-Regular.ttf); }
+@font-face { font-family: Poppins; font-weight: 500; src: url(Poppins-Medium.ttf); }
+@font-face { font-family: Poppins; font-weight: 600; src: url(Poppins-SemiBold.ttf); }
 :root { --accent: #4FD8C4; --text: #E8EEF2; --muted: #9AA9B5; --ink: #10171D; --deep: #0C1217; --line: #1E2A33; --water: rgba(79, 216, 196, 0.22); --ease: cubic-bezier(0.2, 0.8, 0.2, 1); }
 * { box-sizing: border-box; }
+/* .row and others set display, which would otherwise beat the hidden attribute */
+[hidden] { display: none !important; }
 body { margin: 0; height: 100vh; background: radial-gradient(900px 500px at 85% -10%, rgba(79, 216, 196, 0.10), transparent 70%), var(--deep); color: var(--text); font: 14px Poppins, system-ui, sans-serif; font-synthesis: none; -webkit-user-select: none; user-select: none; cursor: default; overflow: hidden; }
 button, select { font: inherit; color: inherit; }
 button { cursor: pointer; border: 0; background: none; padding: 0; }
@@ -112,7 +116,7 @@ h1 { font-size: 84px; line-height: 1; letter-spacing: -4px; margin: 10px 0 30px 
 .card .by { color: var(--muted); font-size: 12px; }
 .card p { margin: 8px 0 10px; color: var(--muted); font-size: 12.5px; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 36px; }
 .card .count { font-size: 11px; letter-spacing: 1px; color: var(--muted); }
-#cf-more { display: block; margin: 16px auto 0; }
+#cf-more { height: 1px; }
 .btn.on { color: var(--accent); border-color: rgba(79, 216, 196, 0.5); }
 .row + .row { border-top: 1px solid var(--line); }
 .row > :first-child { flex: 1; }
@@ -305,6 +309,117 @@ h1 { font-size: 84px; line-height: 1; letter-spacing: -4px; margin: 10px 0 30px 
 .seg button.on:disabled { opacity: 1; }
 .row select:disabled { opacity: 0.6; cursor: default; }
 #is-delete { border-color: rgba(229, 112, 122, 0.5); color: #E5707A; }
+
+/* the tour: everything dims except the spot being explained, with a card beside it */
+#tour { position: fixed; inset: 0; z-index: 6; }
+#tour[hidden] { display: none; }
+#tour-hole { position: absolute; border-radius: 18px; box-shadow: 0 0 0 9999px rgba(8, 12, 16, 0.78), 0 0 0 2px var(--accent); transition: all 0.45s var(--ease); pointer-events: none; }
+#tour-card { position: absolute; width: 340px; padding: 22px 24px 18px; border: 1px solid var(--line); border-radius: 22px; background: var(--ink); box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5); transition: opacity 0.22s, transform 0.35s var(--ease); }
+/* between stops the card dips out, moves, and rises back in with the new words */
+#tour-card.away { opacity: 0; transform: translateY(10px) scale(0.98); }
+/* pages change at once during the tour: the light gliding to the next spot is the motion */
+body.touring .page { transition: none; }
+#tour-hole::after { content: ""; position: absolute; inset: -2px; border-radius: inherit; border: 2px solid var(--accent); opacity: 0; }
+#tour-hole.ping::after { animation: ping 0.7s ease-out; }
+@keyframes ping { from { opacity: 0.9; transform: scale(1); } to { opacity: 0; transform: scale(1.12); } }
+#tour-card h3 { margin: 6px 0 6px; font-size: 20px; font-weight: 400; letter-spacing: -0.4px; }
+#tour-card p:not(.eyebrow) { color: var(--muted); line-height: 1.55; }
+#tour-card .eyebrow { font-size: 11px; letter-spacing: 2px; }
+#tour-card .actions { display: flex; align-items: center; gap: 8px; margin-top: 18px; }
+.list.gap { margin-top: 14px; }
+
+/* the tour's end: a wave of Talaz's colour opens from the Play button over the whole window, says so, and clears */
+#finale { position: fixed; inset: 0; z-index: 7; display: grid; place-items: center; text-align: center; color: var(--deep); background: linear-gradient(160deg, #6fe6d4, var(--accent) 55%, #2fb3a0); clip-path: circle(0 at var(--x, 50%) var(--y, 50%)); transition: clip-path 0.75s var(--ease), opacity 0.5s; }
+#finale[hidden] { display: none; }
+#finale.open { clip-path: circle(150% at var(--x, 50%) var(--y, 50%)); }
+#finale.out { opacity: 0; }
+#finale div { opacity: 0; transform: translateY(16px); transition: opacity 0.45s 0.3s, transform 0.7s 0.3s var(--ease); }
+#finale.open div { opacity: 1; transform: none; }
+#finale h2 { font-size: 56px; letter-spacing: -2px; margin-top: 10px; }
+#finale p { font-size: 17px; opacity: 0.75; margin: 6px 0 0; color: inherit; }
+#finale svg path { stroke-dasharray: 40; stroke-dashoffset: 40; transition: stroke-dashoffset 0.9s 0.4s var(--ease); }
+#finale.open svg path { stroke-dashoffset: 0; }
+
+/* ---- design pass: weights, one radius scale, quieter labels, pressed states ---- */
+:root { --r-s: 7px; --r-m: 11px; --r-l: 16px; --r-xl: 22px; }
+/* three weights instead of one: titles and names carry, labels step back */
+h1 { font-weight: 600; letter-spacing: -3.5px; }
+h2, .wstep h3, #setup h3, .dhead h3, #tour-card h3 { font-weight: 500; text-wrap: balance; }
+.btn, nav button, #play, .tabs button.on, .seg button.on, .icard strong, .card strong, .tile strong, .stats strong, .facts strong, .prow > div, .choice > span { font-weight: 500; }
+.row small, .choice small, .icard small { font-weight: 400; }
+p, small { text-wrap: pretty; }
+/* numbers that change keep their width */
+.stats strong, .facts strong, .count, .ptags, #ov-sessions, .loglines, #fact-played { font-variant-numeric: tabular-nums; }
+/* the radius scale: small things are tighter, containers softer; only the bar and Play stay round */
+.btn, .row select, .row input, .logbar input, .logbar select, #find, .back { border-radius: var(--r-m); }
+.btn.big { border-radius: 14px; }
+.tag { border-radius: var(--r-s); padding: 3px 8px; }
+.seg { border-radius: var(--r-m); }
+.seg button, .seg > i { border-radius: var(--r-s); }
+.list, .stats div, .card, .icard, #toast, .loglines { border-radius: var(--r-l); }
+.tile { border-radius: 20px; }
+.wcard, .dcard, #setup .card, #tour-card { border-radius: var(--r-xl); }
+.choice, .field input, #setup .choice, #setup .path, .rail button { border-radius: var(--r-m); }
+.pick select { border-radius: 18px; }
+.picon, .prow > .picon { border-radius: var(--r-m); }
+.dhead img { border-radius: 14px; }
+.shots img, .shot-sk { border-radius: var(--r-m); }
+#tour-hole { border-radius: 14px; }
+/* section labels in plain sentence case; the spaced capitals stay only on Home's one eyebrow */
+.cols h3, .rows h3, .sub, #tab-isettings h3.sub, .facts span, .stats span, .tile em, .pick label { text-transform: none; letter-spacing: 0; font-size: 12.5px; font-weight: 500; }
+.tile em { font-size: 12px; }
+.pick label { font-size: 11.5px; top: 11px; }
+#tour-card .eyebrow { text-transform: none; letter-spacing: 0; font-size: 12px; color: var(--muted); }
+/* a button gives under the finger */
+.btn:not(:disabled):active, .back:active, .get:not(:disabled):active, .choice:not(:disabled):active, .seg button:not(:disabled):active, .tabs button:active { transform: scale(0.96); }
+.tile:active, .icard:active { transform: translateY(0) scale(0.985); }
+.btn, .back, .get, .choice { transition: border-color 0.2s, background 0.2s, color 0.2s, transform 0.15s var(--ease), filter 0.2s; }
+/* surfaces: a hairline of light on the top edge, so cards sit on the page rather than in it */
+.list, .stats div, .card, .icard, .tile, .wcard, .dcard, #tour-card { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035); }
+#toast { box-shadow: 0 20px 60px rgba(4, 14, 16, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.04); }
+/* icons */
+.ic { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; display: block; }
+.back { display: grid; place-items: center; }
+.card .get { font-size: 0; }
+.card .get .ic { width: 20px; height: 20px; stroke-width: 2; }
+.card .get .dots { font-size: 14px; }
+.icard { background-color: var(--ink); background-repeat: no-repeat; background-size: 100% 100%; }
+.icard .meta { position: relative; }
+/* WebKit rings a select after a mouse pick as if it were the keyboard; the ring is for the keyboard only */
+body.mouse select:focus-visible { outline: none; }
+
+/* nothing in the launcher is picked up, dragged out or selected like a web page's pictures */
+img, svg { -webkit-user-drag: none; -webkit-user-select: none; user-select: none; }
+.dbody { -webkit-user-select: none; user-select: none; }
+/* mod tiles a step lighter than the page, with a firmer edge, and the sea quiet behind other pages */
+.tile { background: #141d25; border-color: #27353f; }
+.tile:hover { border-color: #3a4c58; }
+.tile[aria-checked=true] { border-color: rgba(79, 216, 196, 0.7); }
+.tile small { color: #a9b7c2; }
+body:not([data-page=home]) .sea { opacity: 0.35; transition: opacity 0.5s; }
+.sea { transition: opacity 0.5s; }
+/* screenshots open large, with the next and the last a click or an arrow key away */
+.shots img { cursor: zoom-in; transition: filter 0.2s, transform 0.2s var(--ease); }
+.shots img:hover { filter: brightness(1.12); }
+#viewer { z-index: 8; grid-template-columns: 72px 1fr 72px; background: rgba(6, 10, 13, 0.92); }
+#viewer img { grid-column: 2; max-width: 100%; max-height: 82vh; border-radius: var(--r-l); justify-self: center; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6); animation: rise 0.3s var(--ease); }
+.vbtn { width: 44px; height: 44px; justify-self: center; background: rgba(16, 23, 29, 0.8); color: var(--text); }
+#v-prev { grid-column: 1; grid-row: 1; }
+#v-next { grid-column: 3; grid-row: 1; }
+#viewer img { grid-row: 1; }
+#v-close { position: absolute; top: 22px; right: 22px; }
+#v-count { position: absolute; bottom: 22px; left: 50%; transform: translateX(-50%); color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+.vbtn[hidden] { display: none; }
+/* a pack's card: a screenshot across the top, its logo as a small square over the edge. Without
+   a screenshot the cover is the logo, blurred into a wash of its colours */
+.card .cover { height: 124px; overflow: hidden; background: #0e151b; }
+.card .cover .banner { height: 100%; }
+.card .cover.soft .banner { filter: blur(22px) saturate(1.3) brightness(0.8); transform: scale(1.5); }
+.card .logo { position: absolute; top: 92px; left: 16px; width: 56px; height: 56px; border-radius: 13px; object-fit: cover; background: #0e151b; border: 3px solid var(--ink); }
+.card .get { top: 100px; }
+.card .body { padding-top: 34px; }
+.card strong { padding-right: 0; }
+.card.skel .banner { height: 124px; }
 </style>
 </head>
 <body>
@@ -349,12 +464,12 @@ talaz
 
 <section class="page" id="inst">
 <div class="ihead">
-<button class="back" id="inst-back" aria-label="Back to instances">←</button>
+<button class="back" id="inst-back" aria-label="Back to instances"><svg class="ic" viewBox="0 0 20 20" aria-hidden="true"><path d="M11.5 4.5 6 10l5.5 5.5M6.5 10H15"/></svg></button>
 <div class="ititle"><h2 id="inst-name"></h2><p id="inst-meta"></p></div>
 <button class="btn solid big" id="inst-play">Play</button>
 </div>
 <div class="tabs" role="tablist" id="inst-tabs">
-<button data-tab="overview" class="on">Overview</button><button data-tab="mods">Mods</button><button data-tab="textures">Textures</button><button data-tab="worlds">Worlds</button><button data-tab="logs">Logs</button><button data-tab="live">Live Log</button><button data-tab="isettings">Settings</button>
+<button data-tab="overview" class="on">Overview</button><button data-tab="mods">Mods</button><button data-tab="textures">Textures</button><button data-tab="worlds">Worlds</button><button data-tab="logs">Logs</button><button data-tab="live">Live log</button><button data-tab="isettings">Settings</button>
 </div>
 
 <div class="panels" id="panels">
@@ -380,7 +495,7 @@ talaz
 <div id="browse" hidden>
 <div class="logbar stick second"><input id="cf-find" type="search" placeholder="Search CurseForge" aria-label="Search CurseForge"><select id="cf-sort" aria-label="Sort"><option value="popular">Popular</option><option value="downloads">Most downloads</option><option value="updated">Recently updated</option><option value="name">Name</option></select></div>
 <div class="cards" id="cf-cards"></div>
-<button class="btn" id="cf-more" hidden>Load more</button>
+<div id="cf-more" aria-hidden="true"></div>
 <p class="fine">From CurseForge. Downloads count on the author's page.</p>
 </div>
 </div>
@@ -454,13 +569,14 @@ talaz
 <div class="row" id="row-size"><div>Game window<small>The size instances open at unless they pick their own</small></div><select id="size" aria-label="Game window size"></select></div>
 <div class="row" id="row-google"><div>Google Play<small id="who"></small></div><button class="btn" id="sign"></button></div>
 </div>
+<div class="list gap"><div class="row"><div>Quick tour<small>A short walk through the launcher</small></div><button class="btn" id="tour-again">Start</button></div></div>
 <p class="fine">Talaz 0.1.0 by Danuvia. Not affiliated with Mojang or Microsoft.</p>
 </div>
 </section>
 
 <section id="detail" class="overlay" hidden aria-label="Pack details">
 <div class="dcard">
-<button class="back dclose" id="d-close" aria-label="Close">✕</button>
+<button class="back dclose" id="d-close" aria-label="Close"><svg class="ic" viewBox="0 0 20 20" aria-hidden="true"><path d="m5.5 5.5 9 9m0-9-9 9"/></svg></button>
 <div class="dhead"><img id="d-logo" alt=""><div><h3 id="d-name"></h3><p id="d-by"></p></div><button class="btn solid big" id="d-get">Install</button></div>
 <div class="dbody">
 <div class="shots" id="d-shots"></div>
@@ -469,6 +585,14 @@ talaz
 <div class="dfoot"><span id="d-facts"></span><button class="link" id="d-page">Open on CurseForge</button></div>
 </div>
 </section>
+
+<div id="viewer" class="overlay" hidden aria-label="Screenshot">
+<button class="back vbtn" id="v-close" aria-label="Close"><svg class="ic" viewBox="0 0 20 20" aria-hidden="true"><path d="m5.5 5.5 9 9m0-9-9 9"/></svg></button>
+<button class="back vbtn" id="v-prev" aria-label="Previous screenshot"><svg class="ic" viewBox="0 0 20 20" aria-hidden="true"><path d="M12 4.5 6.5 10l5.5 5.5"/></svg></button>
+<img id="v-img" alt="">
+<button class="back vbtn" id="v-next" aria-label="Next screenshot"><svg class="ic" viewBox="0 0 20 20" aria-hidden="true"><path d="m8 4.5 5.5 5.5L8 15.5"/></svg></button>
+<span id="v-count"></span>
+</div>
 
 <section id="wizard" class="overlay" hidden aria-label="New instance">
 <div class="wcard">
@@ -529,6 +653,18 @@ talaz
 <i></i>
 </div>
 
+<div id="tour" hidden>
+<div id="tour-hole"></div>
+<div id="tour-card" role="dialog" aria-label="Quick tour">
+<p class="eyebrow" id="tour-count"></p>
+<h3 id="tour-title"></h3>
+<p id="tour-text"></p>
+<div class="actions"><button class="link" id="tour-skip">Skip</button><span class="grow"></span><button class="btn" id="tour-back">Back</button><button class="btn solid" id="tour-next">Next</button></div>
+</div>
+</div>
+
+<div id="finale" hidden aria-live="polite"><div><svg aria-hidden="true" width="64" height="64" viewBox="0 0 26 26" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M2 10c4-5 7-5 11 0s7 5 11 0"/><path d="M2 18c4-5 7-5 11 0s7 5 11 0"/></svg><h2>You're all set</h2><p>Have fun out there.</p></div></div>
+
 <div id="toast" role="status"><p></p><div><i></i></div></div>
 
 <script>
@@ -559,7 +695,18 @@ const hours = (secs) => secs < 60 ? `${secs} s` : secs < 3600 ? `${Math.round(se
 const bytes = (n) => n >= 1 << 30 ? `${(n / (1 << 30)).toFixed(1)} GB` : n >= 1 << 20 ? `${(n / (1 << 20)).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
 const played = (inst) => (inst?.sessions ?? []).reduce((sum, [, secs]) => sum + secs, 0);
 const lastPlayed = (inst) => inst?.sessions?.at(-1)?.[0] ?? 0;
+const ICONS = { down: 'M10 3.5v10m-4.5-4L10 14l4.5-4.5M4.5 16.5h11', check: 'm4.5 10.5 3.5 3.5 7.5-8', out: 'M8 5h7v7M15 5 5.5 14.5' };
+function icon(name) {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'), path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  svg.setAttribute('viewBox', '0 0 20 20'); svg.setAttribute('aria-hidden', 'true'); svg.classList.add('ic');
+  path.setAttribute('d', ICONS[name]);
+  svg.append(path);
+  return svg;
+}
 const installedNames = () => state.versions.map(([name]) => name);
+// every mod works on these versions; elsewhere the ones hooked into the game stay off
+const fullMods = (version) => (state.full_mods ?? []).includes(version);
+const modsTag = (version) => state.windows ? [] : [el('span', { className: 'tag' + (fullMods(version) ? '' : ' plain'), title: fullMods(version) ? 'Every mod works on this version' : 'Food, the Mouse Tweaks wheel and Night Vision need another version. The HUDs, Zoom, Motion Blur and the rest work' }, fullMods(version) ? 'Full mods' : 'Basic mods')];
 
 // pages: the instance page belongs under Instances in the bar
 const thumb = document.querySelector('nav i');
@@ -647,7 +794,9 @@ function versionOf(inst) {
 
 function drawMods() {
   const inst = current();
-  $('mods-hint').textContent = inst?.vanilla ? 'This instance is vanilla, so it starts without mods. Make a Talaz instance to use them.' : 'Pick what the game starts with. Right click a mod to change its setting. Everything else is in the game, behind Right Shift.';
+  const basic = !state.windows && !inst?.vanilla && versionOf(inst) && !fullMods(versionOf(inst));
+  $('mods-hint').textContent = inst?.vanilla ? 'This instance is vanilla, so it starts without mods. Make a Talaz instance to use them.'
+    : 'Pick what the game starts with. Right click a mod to change its setting. Everything else is in the game, behind Right Shift.' + (basic ? ` On ${versionOf(inst)}, Food, the Mouse Tweaks wheel and Night Vision don't work yet.` : '');
   $('tiles').hidden = $('find').hidden = !!inst?.vanilla;
   // made once, then only switched, so the water moves instead of jumping
   if (!$('tiles').children.length) {
@@ -687,7 +836,7 @@ function drawVersions() {
     const remove = el('button', { className: 'btn', textContent: 'Delete', disabled: busy });
     remove.onclick = sure(remove, 'Delete it?', () => run(`Minecraft ${name} was deleted`, () => invoke('remove', { version: name })));
     const using = insts.list.filter((i) => i.version === name).map((i) => i.name);
-    return el('div', { className: 'row' }, el('div', {}, name, el('small', {}, (own ? 'Downloaded by Talaz' : 'From Minecraft Bedrock Launcher') + (using.length ? ` · Used by ${using.join(', ')}` : '')), ...note(name)), ...(own ? [remove] : []));
+    return el('div', { className: 'row' }, el('div', {}, name, el('small', {}, (own ? 'Downloaded by Talaz' : 'From Minecraft Bedrock Launcher') + (using.length ? ` · Used by ${using.join(', ')}` : '')), ...note(name)), ...modsTag(name), ...(own ? [remove] : []));
   }));
   if (!names.length) $('installed').replaceChildren(el('div', { className: 'row muted' }, 'Nothing here yet'));
   if (available) {
@@ -696,7 +845,7 @@ function drawVersions() {
     $('downloads').replaceChildren(...list.map(([code, name]) => {
       const get = el('button', { className: 'btn', textContent: 'Download', disabled: busy });
       get.onclick = () => download(code, name);
-      return el('div', { className: 'row' }, el('div', {}, name, ...note(name)), ...(name === available.recommended ? [el('span', { className: 'tag' }, 'Recommended')] : []), get);
+      return el('div', { className: 'row' }, el('div', {}, name, ...note(name)), ...(name === available.recommended ? [el('span', { className: 'tag' }, 'Recommended')] : []), ...modsTag(name), get);
     }));
   }
 }
@@ -706,12 +855,27 @@ function drawVersions() {
 function tagsOf(inst) {
   return [state.windows ? 'Windows' : versionOf(inst) || 'No version', inst.vanilla ? 'Vanilla' : 'Talaz', inst.shared ? 'Shared folder' : 'Own folder'];
 }
+// each instance's card gets its own stretch of sea: two swells whose length, height and
+// place come from its id, so cards can be told apart at a glance without any artwork
+function seaOf(id) {
+  let h = 2166136261;
+  for (const c of id) h = Math.imul(h ^ c.charCodeAt(0), 16777619) >>> 0;
+  const pick = (lo, hi) => { h = Math.imul(h ^ (h >>> 15), 2246822519) >>> 0; return lo + (h % 1000) / 1000 * (hi - lo); };
+  const wave = (base, amp, len, shift, alpha) => {
+    let d = `M0 100V${base}`;
+    for (let x = 0; x <= 240; x += 8) d += `L${x} ${(base + amp * Math.sin((x + shift) / len)).toFixed(1)}`;
+    return `<path d='${d}V100z' fill='%234FD8C4' fill-opacity='${alpha}'/>`;
+  };
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 100' preserveAspectRatio='none'>${wave(pick(52, 66), pick(5, 11), pick(18, 34), pick(0, 200), 0.09)}${wave(pick(68, 80), pick(4, 9), pick(14, 26), pick(0, 200), 0.13)}</svg>`;
+  return `url("data:image/svg+xml,${svg}")`;
+}
 function drawInstances() {
   $('inst-cards').replaceChildren(...insts.list.map((inst) => {
     const card = el('button', { className: 'icard' + (inst.id === insts.selected ? ' sel' : '') },
       el('strong', {}, inst.name),
       el('small', {}, inst.description || `Last played ${ago(lastPlayed(inst)).toLowerCase()}`),
       el('div', { className: 'meta' }, ...tagsOf(inst).map((t) => el('span', { className: 'tag' }, t))));
+    card.style.backgroundImage = `${seaOf(inst.id)}, linear-gradient(160deg, rgba(79, 216, 196, 0.08), transparent 60%)`;
     if (state.running && inst.id === insts.selected) card.append(el('i', { className: 'run', title: 'Running' }));
     card.onclick = () => openInstance(inst.id);
     return card;
@@ -858,7 +1022,7 @@ function drawWizard() {
   for (const c of document.querySelectorAll('[data-type]')) c.classList.toggle('on', c.dataset.type === wiz.type);
   for (const c of document.querySelectorAll('[data-folder]')) { c.classList.toggle('on', c.dataset.folder === (wiz.type === 'vanilla' ? 'own' : wiz.folder)); c.disabled = wiz.type === 'vanilla' && c.dataset.folder === 'shared'; }
   $('w-versions').replaceChildren(...installedNames().map((n) => {
-    const row = el('div', { className: 'row' + (n === wiz.version ? ' on' : '') }, el('div', {}, n, ...note(n)), ...(n === available?.recommended ? [el('span', { className: 'tag' }, 'Recommended')] : []));
+    const row = el('div', { className: 'row' + (n === wiz.version ? ' on' : '') }, el('div', {}, n, ...note(n)), ...(n === available?.recommended ? [el('span', { className: 'tag' }, 'Recommended')] : []), ...(wiz.type === 'vanilla' ? [] : modsTag(n)));
     row.onclick = () => { wiz.version = n; drawWizard(); };
     return row;
   }));
@@ -930,31 +1094,41 @@ async function addPack(path) {
   drawPacks();
 }
 // browse: CurseForge's Bedrock resource packs, searched once typing stops
-let cfPage = 0, cfTimer;
+let cfPage = 0, cfTimer, cfBusy = false, cfMore = false;
 const short = (n) => n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}K` : String(n);
 async function browse(more) {
+  if (more && (cfBusy || !cfMore)) return;
+  cfBusy = true;
+  const asked = [$('cf-find').value, $('cf-sort').value].join();
   cfPage = more ? cfPage + 1 : 0;
   const skel = () => el('div', { className: 'card skel' }, el('div', { className: 'banner sk' }), el('div', { className: 'body' }, el('div', { className: 'line sk', style: '' }), el('div', { className: 'line sk' }), el('div', { className: 'line sk' })));
   const skels = Array.from({ length: more ? 3 : 9 }, skel);
   if (!more) $('cf-cards').replaceChildren(...skels); else $('cf-cards').append(...skels);
   let items;
   try { items = await invoke('browse', { search: $('cf-find').value.trim(), sort: $('cf-sort').value, page: cfPage }); }
-  catch (err) { skels.forEach((k) => k.remove()); if (!more) $('cf-cards').replaceChildren(el('p', { className: 'muted' }, String(err))); return; }
+  catch (err) { skels.forEach((k) => k.remove()); cfBusy = false; cfMore = false; if (!more) $('cf-cards').replaceChildren(el('p', { className: 'muted' }, String(err))); return; }
+  // the search changed while this one was on its way: its answer is stale
+  if (asked !== [$('cf-find').value, $('cf-sort').value].join()) { cfBusy = false; return browse(false); }
   skels.forEach((k) => k.remove());
   const cards = items.map((item) => {
     const have = installedCF.has(item.id);
-    const get = el('button', { className: 'get', textContent: have ? '✓' : item.installable ? '↓' : '↗', title: have ? 'Installed' : item.installable ? 'Install' : 'Only on CurseForge', disabled: have });
+    const get = el('button', { className: 'get', title: have ? 'Installed' : item.installable ? 'Install' : 'Only on CurseForge', disabled: have }, icon(have ? 'check' : item.installable ? 'down' : 'out'));
+    get.setAttribute('aria-label', get.title);
     get.dataset.cf = item.id;
-    get.onclick = (event) => { event.stopPropagation(); installItem(item, get, '↓'); };
+    get.onclick = (event) => { event.stopPropagation(); installItem(item, get, 'down'); };
     const card = el('div', { className: 'card' },
-      el('img', { className: 'banner', src: item.logo ?? '', alt: '', loading: 'lazy', decoding: 'async' }), get,
+      el('div', { className: 'cover' + (item.cover ? '' : ' soft') }, el('img', { className: 'banner', src: item.cover ?? item.logo ?? '', alt: '', loading: 'lazy', decoding: 'async' })),
+      el('img', { className: 'logo', src: item.logo ?? '', alt: '', loading: 'lazy', decoding: 'async' }), get,
       el('div', { className: 'body' }, el('strong', {}, item.name), el('span', { className: 'by' }, `by ${item.author}`), el('p', {}, item.summary), el('span', { className: 'count' }, `${short(item.downloads)} downloads`)));
     card.onclick = () => openDetail(item);
     return card;
   });
   if (more) $('cf-cards').append(...cards);
   else $('cf-cards').replaceChildren(...(cards.length ? cards : [el('p', { className: 'muted' }, 'No packs found. Try another search.')]));
-  $('cf-more').hidden = items.length < 24;
+  cfMore = items.length >= 24;
+  cfBusy = false;
+  // a tall window can show the end of a page at once: keep going until the bottom is off screen
+  requestAnimationFrame(() => { const r = $('cf-more').getBoundingClientRect(); if (cfMore && r.top && r.top < innerHeight + 300) browse(true); });
 }
 async function installItem(item, button, idle) {
   if (!item.installable) return item.page && invoke('open_page', { url: item.page });
@@ -962,12 +1136,12 @@ async function installItem(item, button, idle) {
   try {
     await invoke('install_pack', { id: item.id });
     installedCF.add(item.id);
-    for (const b of document.querySelectorAll(`.get[data-cf="${item.id}"]`)) Object.assign(b, { textContent: '✓', disabled: true, title: 'Installed' });
+    for (const b of document.querySelectorAll(`.get[data-cf="${item.id}"]`)) { b.replaceChildren(icon('check')); Object.assign(b, { disabled: true, title: 'Installed' }); }
     if (detailItem?.id === item.id) Object.assign($('d-get'), { textContent: 'Installed', disabled: true });
     say(`${item.name} was installed and turned on`);
     loadPacks();
   }
-  catch (err) { button.disabled = false; button.textContent = idle; say(String(err)); }
+  catch (err) { button.disabled = false; if (ICONS[idle]) button.replaceChildren(icon(idle)); else button.textContent = idle; say(String(err)); }
 }
 // the author's description is HTML from the internet: only plain formatting is kept, nothing that runs
 const SAFE = new Set(['P', 'BR', 'B', 'STRONG', 'I', 'EM', 'U', 'UL', 'OL', 'LI', 'H1', 'H2', 'H3', 'H4', 'A', 'IMG', 'SPAN', 'DIV', 'HR', 'BLOCKQUOTE', 'CODE', 'PRE', 'TABLE', 'TBODY', 'TR', 'TD', 'TH', 'CENTER']);
@@ -1003,18 +1177,41 @@ async function openDetail(item) {
   let d;
   try { d = await invoke('pack_details', { id: item.id }); } catch (err) { if (detailItem === item) $('d-desc').textContent = String(err); return; }
   if (detailItem !== item) return;
-  $('d-shots').replaceChildren(...d.screenshots.slice(0, 8).map((src) => el('img', { src, alt: '', loading: 'lazy' })));
+  shots = d.screenshots.slice(0, 12);
+  $('d-shots').replaceChildren(...shots.map((src, i) => Object.assign(el('img', { src, alt: `Screenshot ${i + 1}`, loading: 'lazy' }), { onclick: () => view(i) })));
   $('d-desc').replaceChildren(...clean(d.description).childNodes);
   $('d-facts').textContent = d.updated ? `Updated ${new Date(d.updated).toLocaleDateString()}` : '';
 }
 $('d-desc').onclick = (event) => { const a = event.target.closest('a'); if (!a) return; event.preventDefault(); if (a.dataset.href?.startsWith('https://www.curseforge.com/')) invoke('open_page', { url: a.dataset.href }); };
 $('d-get').onclick = () => detailItem && installItem(detailItem, $('d-get'), 'Install');
 $('d-page').onclick = () => detailItem?.page && invoke('open_page', { url: detailItem.page });
+// a screenshot, large, with the others one step away
+let shots = [], shotAt = 0;
+function view(i) {
+  shotAt = (i + shots.length) % shots.length;
+  const img = $('v-img');
+  img.style.animation = 'none'; img.offsetWidth; img.style.animation = '';
+  img.src = shots[shotAt];
+  $('v-count').textContent = `${shotAt + 1} of ${shots.length}`;
+  $('v-prev').hidden = $('v-next').hidden = shots.length < 2;
+  $('viewer').hidden = false;
+}
+$('v-prev').onclick = () => view(shotAt - 1);
+$('v-next').onclick = () => view(shotAt + 1);
+$('v-close').onclick = () => ($('viewer').hidden = true);
+$('viewer').onclick = (event) => { if (event.target === $('viewer')) $('viewer').hidden = true; };
+document.addEventListener('keydown', (event) => {
+  if ($('viewer').hidden) return;
+  if (event.key === 'Escape') $('viewer').hidden = true;
+  if (event.key === 'ArrowLeft') view(shotAt - 1);
+  if (event.key === 'ArrowRight') view(shotAt + 1);
+});
 $('d-close').onclick = () => { $('detail').hidden = true; detailItem = null; };
 $('detail').onclick = (event) => { if (event.target === $('detail')) $('d-close').onclick(); };
 $('cf-find').oninput = () => { clearTimeout(cfTimer); cfTimer = setTimeout(() => browse(false), 400); };
 $('cf-sort').onchange = () => browse(false);
-$('cf-more').onclick = () => browse(true);
+// the next page loads by itself as the end of the list comes near
+new IntersectionObserver((entries) => { if (entries.some((e) => e.isIntersecting) && !$('browse').hidden) browse(true); }, { root: $('panels'), rootMargin: '0px 0px 400px 0px' }).observe($('cf-more'));
 for (const tab of document.querySelectorAll('[data-packs]')) tab.onclick = () => {
   const browsing = tab.dataset.packs === 'browse';
   for (const t of document.querySelectorAll('[data-packs]')) t.classList.toggle('on', t === tab);
@@ -1162,6 +1359,77 @@ invoke('available').then(async (list) => {
 }).catch((err) => $('downloads').replaceChildren(el('div', { className: 'row muted' }, String(err))));
 
 
+// The tour: a few stops through the launcher, shown once after the setup and again from Settings.
+// Each stop goes to its page, puts the light on one thing and says what it is for
+const TOUR = [
+  { page: 'home', at: () => document.querySelector('nav'), title: 'Getting around', text: 'Home to play, Instances for your setups, Versions to download the game, and Settings for the launcher itself.' },
+  { page: 'home', at: () => document.querySelector('.go'), title: 'Play', text: 'Pick an instance and press Play. While the game runs, the same button stops it.' },
+  { page: 'instances', at: () => $('inst-cards'), title: 'Instances', text: 'An instance is one setup of the game: its own version, mods, resource packs, worlds and logs. Click one to open it.' },
+  { page: 'instances', at: () => $('inst-new'), title: 'Make your own', text: "A new instance takes four choices: Talaz's mods or vanilla, the version, where its worlds live, and a name." },
+  { page: 'inst', at: () => $('inst-tabs'), title: 'Inside an instance', text: 'Mods turns mods on and off. Textures holds resource packs and browses CurseForge. Worlds, Logs and Settings are here too.' },
+  { page: 'versions', at: () => document.querySelector('#versions .cols'), title: 'Versions', text: 'Download the game here with the account that owns it. "Full mods" marks the versions every mod works on.' },
+  { page: 'home', at: () => $('play'), title: 'In the game', text: "Press Right Shift in a world to open Talaz's menu: every mod and its settings, and Edit HUD to move things around." },
+];
+let tourStep = 0;
+function tour(step) {
+  // Windows has no Versions page
+  if (state.windows && !step) for (let i = TOUR.length; i--;) if (TOUR[i].page === 'versions') TOUR.splice(i, 1); else TOUR[i].text = TOUR[i].text.replace(' Versions to download the game,', '');
+  const stop = TOUR[(tourStep = step)], hole = $('tour-hole'), card = $('tour-card'), first = $('tour').hidden;
+  document.body.classList.add('touring');
+  if (first) {
+    // the light starts as the whole window and closes in on the first spot
+    $('tour').hidden = false;
+    hole.style.transition = 'none';
+    Object.assign(hole.style, { left: '0px', top: '0px', width: `${innerWidth}px`, height: `${innerHeight}px` });
+    hole.offsetWidth;
+    hole.style.transition = '';
+  }
+  card.classList.add('away');
+  if (stop.page === 'inst') { inInstance = true; show('inst'); } else { if (stop.page === 'instances') inInstance = false; show(stop.page); }
+  // the page is already in place, so the light can leave for the new spot straight away
+  const r = stop.at().getBoundingClientRect(), pad = 8;
+  Object.assign(hole.style, { left: `${r.left - pad}px`, top: `${r.top - pad}px`, width: `${r.width + pad * 2}px`, height: `${r.height + pad * 2}px` });
+  hole.classList.remove('ping');
+  setTimeout(() => {
+    if ($('tour').hidden || tourStep !== step) return;
+    $('tour-count').textContent = `${step + 1} of ${TOUR.length}`;
+    $('tour-title').textContent = stop.title;
+    $('tour-text').textContent = stop.text;
+    $('tour-back').hidden = step === 0;
+    $('tour-next').textContent = step === TOUR.length - 1 ? 'Done' : 'Next';
+    const below = r.bottom + pad + 16 + card.offsetHeight < innerHeight;
+    card.style.top = `${below ? r.bottom + pad + 16 : Math.max(16, r.top - pad - 16 - card.offsetHeight)}px`;
+    card.style.left = `${Math.max(16, Math.min(innerWidth - card.offsetWidth - 16, r.left + r.width / 2 - card.offsetWidth / 2))}px`;
+    card.classList.remove('away');
+    hole.classList.add('ping');
+  }, first ? 320 : 200);
+}
+function endTour() {
+  $('tour').hidden = true;
+  document.body.classList.remove('touring');
+  try { localStorage.setItem('tour', 'done'); } catch {}
+  inInstance = false;
+  show('home');
+}
+// finishing the tour, rather than skipping it, ends on a full-window "You're all set"
+function finishTour() {
+  const r = $('tour-next').getBoundingClientRect(), fin = $('finale');
+  fin.style.setProperty('--x', `${r.left + r.width / 2}px`);
+  fin.style.setProperty('--y', `${r.top + r.height / 2}px`);
+  fin.classList.remove('open', 'out');
+  fin.hidden = false;
+  fin.offsetWidth;
+  fin.classList.add('open');
+  setTimeout(endTour, 700);
+  setTimeout(() => fin.classList.add('out'), 2300);
+  setTimeout(() => { fin.hidden = true; fin.classList.remove('open', 'out'); }, 2850);
+}
+$('tour-next').onclick = () => (tourStep === TOUR.length - 1 ? finishTour() : tour(tourStep + 1));
+$('tour-back').onclick = () => tour(tourStep - 1);
+$('tour-skip').onclick = endTour;
+$('tour-again').onclick = () => tour(0);
+document.addEventListener('keydown', (event) => { if ($('tour').hidden) return; if (event.key === 'Escape') endTour(); if (event.key === 'ArrowRight' || event.key === 'Enter') $('tour-next').onclick(); if (event.key === 'ArrowLeft' && tourStep) tour(tourStep - 1); });
+
 // first-run setup: shown until a game folder has been picked
 let setupStep = 0, setupFolder = '';
 function setup(step) {
@@ -1194,7 +1462,8 @@ $('setup-change').onclick = async () => {
 $('setup-done').onclick = async () => {
   try { await invoke('finish_setup', { folder: setupFolder }); } catch (err) { return say(String(err)); }
   $('setup').hidden = true;
-  refresh();
+  await refresh();
+  if (localStorage.getItem('tour') !== 'done') tour(0);
 };
 
 // The water in a mod tile is drawn every frame: a spring moves its level, so it
@@ -1312,6 +1581,10 @@ for (const seg of document.querySelectorAll('.seg')) { glide(seg); segs.observe(
 // a seg that was hidden has no size until shown, so place the pills again when panels change
 new MutationObserver(() => document.querySelectorAll('.seg').forEach(glide)).observe(document.body, { attributes: true, attributeFilter: ['class', 'hidden'], subtree: true });
 document.fonts.ready.then(() => document.querySelectorAll('.seg').forEach(glide));
+// which of the two the player is using, for the focus ring above; a select lets go once picked
+document.addEventListener('mousedown', () => document.body.classList.add('mouse'), true);
+document.addEventListener('keydown', (event) => event.key === 'Tab' && document.body.classList.remove('mouse'), true);
+document.addEventListener('change', (event) => event.target.matches?.('select') && document.body.classList.contains('mouse') && event.target.blur());
 // a launcher has no use for the browser's Reload and Inspect Element
 document.addEventListener('contextmenu', (event) => event.target.closest('input') || event.preventDefault());
 </script>

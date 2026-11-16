@@ -170,7 +170,8 @@ fn mods_def() -> &'static (Vec<DefMod>, Vec<DefSlider>) {
         let num = |v: &str| v.parse::<f32>().unwrap_or(0.0);
         for line in MODS_DEF.lines().map(str::trim) {
             let a = def_args(line);
-            if line.starts_with("MOD(") && a.len() == 4 {
+            // GAMEMOD: needs hooks in the game, which Windows has none of yet
+            if (line.starts_with("MOD(") || (line.starts_with("GAMEMOD(") && !cfg!(windows))) && a.len() == 4 {
                 mods.push(DefMod { id: a[0], name: a[1], note: a[2], on: a[3] != "0" });
             } else if line.starts_with("SLIDER(") && a.len() == 8 {
                 sliders.push(DefSlider { mod_id: a[0], key: a[2], unit: a[3], min: num(a[4]), max: num(a[5]), step: num(a[6]), default: num(a[7]) });
@@ -243,6 +244,8 @@ struct State {
     game_folder: String,
     /// The Windows launcher has no Google sign-in, game downloads or game folder
     windows: bool,
+    /// versions every mod works on here; on the others the ones hooked into the game stay off
+    full_mods: Vec<&'static str>,
 }
 
 #[tauri::command]
@@ -256,6 +259,8 @@ fn state() -> State {
         set_up: game_folder_file().is_some_and(|file| file.exists()),
         game_folder: game_dir().map(|dir| dir.display().to_string()).unwrap_or_default(),
         windows: cfg!(windows),
+        // ponytail: the game hooks are written for 1.21.114.1 on arm64 only; add versions and x86_64 here as they get their own
+        full_mods: if cfg!(all(target_os = "macos", target_arch = "aarch64")) { vec!["1.21.114.1"] } else { vec![] },
         mods: mods_def()
             .0
             .iter()

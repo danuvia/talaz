@@ -16,6 +16,8 @@ pub struct Item {
     summary: String,
     downloads: u64,
     logo: Option<String>,
+    /// the first screenshot, for the card's cover
+    cover: Option<String>,
     page: Option<String>,
     // false when the author turned off downloads outside CurseForge's own site
     installable: bool,
@@ -70,6 +72,7 @@ pub fn browse(search: String, sort: String, page: u32) -> Result<Vec<Item>, Stri
         summary: m["summary"].as_str().unwrap_or_default().to_string(),
         downloads: m["downloadCount"].as_f64().unwrap_or_default() as u64,
         logo: m["logo"]["thumbnailUrl"].as_str().map(str::to_string),
+        cover: m["screenshots"][0]["thumbnailUrl"].as_str().or(m["screenshots"][0]["url"].as_str()).map(str::to_string),
         page: m["links"]["websiteUrl"].as_str().map(str::to_string),
         installable: m["allowModDistribution"].as_bool() != Some(false),
     }).collect())
