@@ -873,7 +873,7 @@ fn main() {
             update(app.handle().clone());
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![state, play, set_mod, add_mod_file, remove_mod_file, open_scripts_folder, remove, notes, warning, faster_graphics, open_game_folder, open_store, pick_folder, finish_setup, play::available, play::sign_in, play::sign_out, play::install, packs::packs, packs::set_pack, packs::import_pack, packs::remove_pack, curseforge::browse, curseforge::install_pack, curseforge::open_page, curseforge::pack_details, instances::instances, instances::select_instance, instances::create_instance, instances::update_instance, instances::delete_instance, instances::worlds, instances::delete_world, instances::open_world, instances::logs, instances::read_log, instances::delete_log, stop_game])
+        .invoke_handler(tauri::generate_handler![state, play, set_mod, add_mod_file, remove_mod_file, open_scripts_folder, remove, notes, warning, faster_graphics, open_game_folder, open_store, pick_folder, finish_setup, play::available, play::sign_in, play::sign_out, play::install, packs::packs, packs::set_pack, packs::import_pack, packs::remove_pack, curseforge::browse, curseforge::install_pack, curseforge::open_page, curseforge::pack_details, instances::instances, instances::select_instance, instances::create_instance, instances::update_instance, instances::delete_instance, instances::worlds, instances::delete_world, instances::open_world, instances::logs, instances::read_log, instances::delete_log, instances::upload_log, instances::open_log, instances::open_logs_folder, stop_game])
         .run(tauri::generate_context!())
         .expect("failed to start Talaz");
 }

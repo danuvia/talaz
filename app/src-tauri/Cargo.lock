@@ -3503,6 +3503,7 @@ dependencies = [
 name = "talaz"
 version = "0.2.0"
 dependencies = [
+ "flate2",
  "png",
  "prost",
  "serde",

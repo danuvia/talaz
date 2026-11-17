@@ -335,11 +335,24 @@ pub fn logs_dir() -> Option<PathBuf> {
     Some(super::game_dir()?.join("logs"))
 }
 
-/// Before a game starts: the last game's log gets a name of its own, and only the newest 20 stay
+/// Before a game starts: the last game's log gets a name of its own and is gzipped, like a
+/// Java launcher's .log.gz, and only the newest 20 stay
 pub fn rotate(dir: &Path) {
     let latest = dir.join("latest.log");
     if latest.exists() {
-        let _ = std::fs::rename(&latest, dir.join(format!("game-{}.log", modified(&latest))));
+        let to = dir.join(format!("game-{}.log.gz", modified(&latest)));
+        let packed = std::fs::read(&latest).ok().and_then(|text| {
+            use std::io::Write;
+            let mut gz = flate2::write::GzEncoder::new(std::fs::File::create(&to).ok()?, flate2::Compression::default());
+            gz.write_all(&text).ok()?;
+            gz.finish().ok()
+        });
+        if packed.is_some() {
+            let _ = std::fs::remove_file(&latest);
+        } else {
+            let _ = std::fs::remove_file(&to);
+            let _ = std::fs::rename(&latest, dir.join(format!("game-{}.log", modified(&latest))));
+        }
     }
     let mut old: Vec<PathBuf> = std::fs::read_dir(dir).into_iter().flatten().flatten().map(|e| e.path()).filter(|p| p.file_name().is_some_and(|n| n.to_string_lossy().starts_with("game-"))).collect();
     old.sort_by_key(|p| std::cmp::Reverse(modified(p)));
@@ -349,7 +362,7 @@ pub fn rotate(dir: &Path) {
 }
 
 fn log_path(name: &str) -> Result<PathBuf, String> {
-    if !name.ends_with(".log") || name.contains(['/', '\\']) || name.starts_with('.') {
+    if !(name.ends_with(".log") || name.ends_with(".log.gz")) || name.contains(['/', '\\']) || name.starts_with('.') {
         return Err("Not a log".into());
     }
     Ok(logs_dir().ok_or("No home folder")?.join(name))
@@ -361,7 +374,7 @@ pub fn logs() -> Vec<LogFile> {
         .into_iter()
         .flatten()
         .flatten()
-        .filter(|e| e.file_name().to_string_lossy().ends_with(".log"))
+        .filter(|e| { let n = e.file_name().to_string_lossy().to_string(); n.ends_with(".log") || n.ends_with(".log.gz") })
         .map(|e| LogFile { name: e.file_name().to_string_lossy().to_string(), modified: modified(&e.path()), size: size(&e.path()) })
         .collect();
     list.sort_by(|a, b| b.modified.cmp(&a.modified));
@@ -371,7 +384,61 @@ pub fn logs() -> Vec<LogFile> {
 #[tauri::command]
 pub fn read_log(name: String) -> Result<String, String> {
     let bytes = std::fs::read(log_path(&name)?).map_err(|_| "That log is gone".to_string())?;
+    if name.ends_with(".gz") {
+        use std::io::Read;
+        let mut text = Vec::new();
+        flate2::read::GzDecoder::new(&bytes[..]).read_to_end(&mut text).map_err(|_| "That log is damaged".to_string())?;
+        return Ok(String::from_utf8_lossy(&text).into_owned());
+    }
     Ok(String::from_utf8_lossy(&bytes).into_owned())
+}
+
+/// The log as it may leave the computer: the home folder's path, which carries the account's
+/// name, and the Google account's address are taken out
+fn shareable(text: &str) -> String {
+    let mut out = text.to_string();
+    if let Some(home) = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }) {
+        let home = home.to_string_lossy().to_string();
+        if home.len() > 1 {
+            out = out.replace(&home, "~");
+        }
+    }
+    if let Some(email) = super::play::email() {
+        out = out.replace(&email, "[censored]");
+    }
+    out
+}
+
+/// Uploads a log to mclo.gs, the paste site Java launchers share logs on, and returns its link
+#[tauri::command(async)]
+pub fn upload_log(name: String) -> Result<String, String> {
+    let text = shareable(&read_log(name)?);
+    // mclo.gs takes up to 10 MB and 25,000 lines; the end of a log is what matters
+    let lines: Vec<&str> = text.lines().collect();
+    let tail = lines[lines.len().saturating_sub(25_000)..].join("\n");
+    let reply: serde_json::Value = ureq::post("https://api.mclo.gs/1/log")
+        .send_form([("content", tail.as_str())])
+        .map_err(|e| format!("mclo.gs didn't answer: {e}"))?
+        .body_mut()
+        .read_to_string()
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .ok_or("mclo.gs sent back something unreadable")?;
+    reply["url"].as_str().map(str::to_string).ok_or_else(|| reply["error"].as_str().unwrap_or("mclo.gs refused the log").to_string())
+}
+
+/// Opens a log in the system's own text viewer
+#[tauri::command]
+pub fn open_log(name: String) -> Result<(), String> {
+    let path = log_path(&name)?;
+    super::runtime::system(if cfg!(target_os = "macos") { "open" } else if cfg!(windows) { "explorer" } else { "xdg-open" }).arg(path).spawn().map(drop).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn open_logs_folder() -> Result<(), String> {
+    let dir = logs_dir().ok_or("No home folder")?;
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    super::runtime::system(if cfg!(target_os = "macos") { "open" } else if cfg!(windows) { "explorer" } else { "xdg-open" }).arg(dir).spawn().map(drop).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -380,4 +447,14 @@ pub fn delete_log(name: String) -> Result<(), String> {
         return Err("The running game is writing that one".into());
     }
     std::fs::remove_file(log_path(&name)?).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod log_tests {
+    #[test]
+    fn a_shared_log_carries_no_home_path() {
+        let home = std::env::var("HOME").unwrap();
+        let out = super::shareable(&format!("Loading mods from {home}/Library/Talaz/mod"));
+        assert_eq!(out, "Loading mods from ~/Library/Talaz/mod");
+    }
 }

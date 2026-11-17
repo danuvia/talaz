@@ -169,6 +169,16 @@ h1 { font-size: 84px; line-height: 1; letter-spacing: -4px; margin: 10px 0 30px 
 .logbar input { flex: 1; height: 40px; padding: 0 16px; border: 1px solid var(--line); border-radius: 20px; background: var(--ink); }
 .loglines { height: calc(100vh - 360px); margin: 0; padding: 14px 16px; overflow: auto; border: 1px solid var(--line); border-radius: 18px; background: var(--ink); color: var(--muted); font: 12px/1.6 ui-monospace, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere; -webkit-user-select: text; user-select: text; cursor: text; }
 .loglines .err { color: #E8B45A; }
+.loglines.numbered { padding-left: 0; }
+.loglines.numbered > div { display: grid; grid-template-columns: 56px 1fr; }
+.loglines.numbered .n { padding-right: 14px; color: #4a5058; text-align: right; -webkit-user-select: none; user-select: none; }
+.loglines .error { color: #e5736b; }
+.loglines .warn { color: #E8B45A; }
+.loglines .talaz { color: var(--accent); }
+.loglines .head { color: var(--text); padding-bottom: 6px; }
+#tab-logs .logbar select { min-width: 200px; }
+.btn.danger { color: #e5736b; border-color: rgba(229, 115, 107, 0.35); }
+.btn.danger:hover { border-color: rgba(229, 115, 107, 0.7); }
 .loglines .times { color: var(--accent); font-weight: 400; }
 #log-state.on { color: var(--accent); }
 
@@ -546,13 +556,9 @@ talaz
 </div>
 
 <div class="panel" id="tab-logs">
-<div class="logs">
-<div class="list" id="log-files"></div>
-<div class="viewer">
-<div class="logbar"><input id="lf-find" type="search" placeholder="Search this log" aria-label="Search this log"><div class="seg" id="lf-level"><button class="on" data-level="all">All</button><button data-level="warn">Warnings</button><button data-level="error">Errors</button></div><button class="btn" id="lf-copy">Copy</button><button class="btn" id="lf-delete">Delete</button></div>
-<pre id="lf-lines" class="loglines" tabindex="0"></pre>
-</div>
-</div>
+<div class="logbar stick"><select id="lf-file" aria-label="Log"></select><button class="btn" id="lf-open">Open log</button><span class="muted" id="lf-size"></span><span class="grow"></span><button class="btn" id="lf-folder" title="Open the logs folder" aria-label="Open the logs folder"></button><button class="btn" id="lf-refresh">Refresh</button><button class="btn danger" id="lf-delete">Delete log</button></div>
+<div class="logbar"><input id="lf-find" type="search" placeholder="Search this log" aria-label="Search this log"><div class="seg" id="lf-level"><button class="on" data-level="all">All</button><button data-level="error">Errors</button><button data-level="warn">Warnings</button><button data-level="info">Info</button><button data-level="talaz">Talaz</button></div><button class="btn" id="lf-copy">Copy</button><button class="btn" id="lf-upload">Upload to mclo.gs</button></div>
+<pre id="lf-lines" class="loglines numbered" tabindex="0"></pre>
 </div>
 
 <div class="panel" id="tab-live">
@@ -1142,30 +1148,66 @@ async function drawWorlds() {
   if (!worlds.length) $('world-list').replaceChildren(el('div', { className: 'row muted' }, 'No worlds yet.'));
 }
 
-// logs: past games' logs of this instance, searchable and filtered by level
-let logFile = null, logText = '';
+// logs, after OneClient's: pick a game's log, search it, filter it by level or to Talaz's own
+// lines, open it or its folder, and share it through mclo.gs. Old games' logs are gzipped
+let logFile = null, logText = '', logFiles = [], appVersion = '';
+window.__TAURI__.app?.getVersion?.().then((v) => (appVersion = v), () => {});
+const logName = (f) => f.name === 'latest.log' ? (state.running ? 'Running game' : 'Last game') : new Date(f.modified * 1000).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
 async function drawLogs() {
-  const files = await invoke('logs').catch(() => []);
-  if (!files.some((f) => f.name === logFile)) logFile = files[0]?.name ?? null;
-  $('log-files').replaceChildren(...files.map((f) => {
-    const row = el('div', { className: 'row' + (f.name === logFile ? ' on' : '') }, el('div', {}, f.name === 'latest.log' ? (state.running ? 'Running game' : 'Last game') : new Date(f.modified * 1000).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }), el('small', {}, bytes(f.size))));
-    row.onclick = () => { logFile = f.name; drawLogs(); };
-    return row;
-  }));
-  if (!files.length) $('log-files').replaceChildren(el('div', { className: 'row muted' }, 'No logs yet'));
+  logFiles = await invoke('logs').catch(() => []);
+  if (!logFiles.some((f) => f.name === logFile)) logFile = logFiles[0]?.name ?? null;
+  $('lf-file').replaceChildren(...logFiles.map((f) => new Option(logName(f), f.name, false, f.name === logFile)));
+  $('lf-file').disabled = !logFiles.length;
+  for (const b of ['lf-open', 'lf-delete', 'lf-copy', 'lf-upload']) $(b).disabled = !logFile;
+  const f = logFiles.find((x) => x.name === logFile);
+  $('lf-size').textContent = f ? `${bytes(f.size)} on disk` : '';
   logText = logFile ? await invoke('read_log', { name: logFile }).catch(() => '') : '';
   drawLogText();
 }
+// a line's level from the launcher's "12:34:56 Warn  [Tag]" start
+function levelOf(line) {
+  const word = /^\d\d:\d\d:\d\d (\w+)/.exec(line)?.[1] ?? '';
+  if (/^(Error|Fatal)$/.test(word) || /fatal signal|exception/i.test(line)) return 'error';
+  if (word === 'Warn') return 'warn';
+  return word === 'Info' ? 'info' : 'other';
+}
 function drawLogText() {
   const find = $('lf-find').value.toLowerCase(), level = document.querySelector('#lf-level .on').dataset.level;
-  const lines = logText.split('\n').filter((l) => (!find || l.toLowerCase().includes(find)) && (level === 'all' || (level === 'error' ? /error|fatal|exception|signal/i.test(l) : /warn|error|fatal|exception/i.test(l))));
-  $('lf-lines').replaceChildren(...lines.slice(-5000).map((l) => el('div', { className: /error|fatal|signal|exception/i.test(l) ? 'err' : '' }, l)));
-  if (!logFile) $('lf-lines').textContent = 'Logs show up here once the instance has run.';
+  if (!logFile) return void ($('lf-lines').textContent = 'Logs show up here once the instance has run.');
+  const inst = current();
+  const head = el('div', { className: 'head' }, el('span', { className: 'n' }, ''), `Talaz ${appVersion} · Minecraft ${versionOf(inst) || '?'} · ${inst?.name ?? ''}`);
+  const rows = [];
+  logText.split('\n').forEach((text, i) => {
+    const kind = levelOf(text), talaz = text.includes('[Talaz]');
+    if (find && !text.toLowerCase().includes(find)) return;
+    if (level === 'talaz' ? !talaz : level !== 'all' && kind !== level) return;
+    rows.push([i, text, kind, talaz]);
+  });
+  // the newest lines matter most, and a long log would slow the page down
+  $('lf-lines').replaceChildren(head, ...rows.slice(-5000).map(([i, text, kind, talaz]) =>
+    el('div', { className: [kind, talaz ? 'talaz' : ''].join(' ') }, el('span', { className: 'n' }, String(i + 1)), text)));
+  if (!rows.length) $('lf-lines').append(el('div', { className: 'muted' }, el('span', { className: 'n' }, ''), 'Nothing matches.'));
 }
+$('lf-file').onchange = () => { logFile = $('lf-file').value; drawLogs(); };
 $('lf-find').oninput = drawLogText;
 for (const b of $('lf-level').children) b.onclick = () => { for (const x of $('lf-level').children) x.classList.toggle('on', x === b); drawLogText(); };
-$('lf-copy').onclick = () => navigator.clipboard.writeText([...$('lf-lines').children].map((d) => d.textContent).join('\n')).then(() => say('Log copied'), (err) => say(String(err)));
+$('lf-folder').replaceChildren(icon('folder'));
+$('lf-folder').onclick = () => invoke('open_logs_folder').catch((err) => say(String(err)));
+$('lf-open').onclick = () => logFile && invoke('open_log', { name: logFile }).catch((err) => say(String(err)));
+$('lf-refresh').onclick = drawLogs;
+$('lf-copy').onclick = () => navigator.clipboard.writeText([...$('lf-lines').children].slice(1).map((d) => d.lastChild.textContent).join('\n')).then(() => say('Log copied'), (err) => say(String(err)));
 $('lf-delete').onclick = sure($('lf-delete'), 'Delete it?', () => logFile && invoke('delete_log', { name: logFile }).then(() => { logFile = null; drawLogs(); }, (err) => say(String(err))));
+// the log goes on a public page, so it takes a second press; the home folder's path and the account's address are taken out first
+$('lf-upload').onclick = sure($('lf-upload'), 'Upload publicly?', async () => {
+  if (!logFile) return;
+  $('lf-upload').disabled = true;
+  try {
+    const url = await invoke('upload_log', { name: logFile });
+    await navigator.clipboard.writeText(url).catch(() => {});
+    say(`Uploaded, link copied: ${url}`);
+  } catch (err) { say(String(err)); }
+  $('lf-upload').disabled = false;
+});
 
 // wizard: type, version, folder, name, like OneClient's New instance
 const W = ['type', 'version', 'folder', 'name'];
