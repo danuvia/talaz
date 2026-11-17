@@ -932,7 +932,7 @@ function versionOf(inst) {
 // the mods, after OneClient's content list: search, a category, on or off. Their settings
 // are in the game, behind Right Shift, where they can be seen working
 function drawMods() {
-  const CATEGORY = { fps: 'HUD', cps: 'HUD', keystrokes: 'HUD', clock: 'HUD', session: 'HUD', coordinates: 'HUD', helditem: 'HUD', direction: 'HUD', speed: 'HUD', deathcoords: 'HUD', lowhealth: 'Visual', zoom: 'Visual', nightvision: 'Visual', food: 'Gameplay', mousetweaks: 'Gameplay', togglesprint: 'Gameplay', riptide: 'Performance', fpslimit: 'Performance' };
+  const CATEGORY = { fps: 'HUD', cps: 'HUD', keystrokes: 'HUD', clock: 'HUD', session: 'HUD', coordinates: 'HUD', helditem: 'HUD', direction: 'HUD', speed: 'HUD', deathcoords: 'HUD', chart: 'HUD', lowhealth: 'Visual', zoom: 'Visual', nightvision: 'Visual', food: 'Gameplay', mousetweaks: 'Gameplay', togglesprint: 'Gameplay', riptide: 'Performance', fpslimit: 'Performance' };
   const CAT_ICON = { HUD: 'grid', Visual: 'eye', Gameplay: 'pointer', Performance: 'bolt' };
   const inst = current();
   const basic = !state.windows && !inst?.vanilla && versionOf(inst) && !fullMods(versionOf(inst));
