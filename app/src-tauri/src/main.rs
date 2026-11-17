@@ -177,16 +177,17 @@ fn mods_def() -> &'static Vec<DefMod> {
         // "--@ id zoom", "--@ slider ...", and so on. One that needs a hook leaves Windows
         // out, which has none yet
         let mut current: Option<DefMod> = None;
-        let mut needs = false;
-        let finish = |m: Option<DefMod>, needs: bool, mods: &mut Vec<DefMod>| {
-            if let Some(m) = m.filter(|_| !(needs && cfg!(windows))) {
+        let (mut needs, mut part, mut bundle) = (false, false, false);
+        // a part of Bedrock Essentials has no card of its own, it's switched on the bundle's page in game
+        let finish = |m: Option<DefMod>, needs: bool, part: bool, mods: &mut Vec<DefMod>| {
+            if let Some(m) = m.filter(|_| !(needs && cfg!(windows)) && !part) {
                 mods.push(m);
             }
         };
         for line in SCRIPTS.lines() {
             if line.starts_with("--@@ ") {
-                finish(current.take(), needs, &mut mods);
-                needs = false;
+                finish(current.take(), needs, part, &mut mods);
+                (needs, part) = (false, false);
                 continue;
             }
             let Some((word, rest)) = line.strip_prefix("--@ ").map(|l| l.split_once(' ').unwrap_or((l, ""))) else { continue };
@@ -196,11 +197,15 @@ fn mods_def() -> &'static Vec<DefMod> {
                 "note" => if let Some(m) = &mut current { m.note = rest },
                 "on" => if let Some(m) = &mut current { m.on = rest == "1" },
                 "needs" => needs = true,
+                "part" => (part, bundle) = (true, true),
                 "slider" | "switch" => if let Some(m) = &mut current { m.settings = true },
                 _ => {}
             }
         }
-        finish(current.take(), needs, &mut mods);
+        finish(current.take(), needs, part, &mut mods);
+        if bundle {
+            mods.push(DefMod { id: "essentials", name: "Bedrock Essentials", note: "The everyday HUDs plus Zoom and Toggle Sprint, each switched on its own", on: true, lua: true, settings: true });
+        }
         mods
     })
 }
@@ -923,8 +928,8 @@ mod tests {
     fn the_mods_come_from_the_mods_own_list() {
         let mods = super::mods_def();
         assert!(mods.iter().any(|m| m.id == "riptide" && m.on && m.name == "Riptide" && !m.lua));
-        assert!(mods.iter().any(|m| m.id == "zoom" && !m.on && m.lua && m.settings));
-        assert!(mods.iter().any(|m| m.id == "fps" && m.lua && !m.settings));
+        assert!(mods.iter().any(|m| m.id == "essentials" && m.on && m.settings));
+        assert!(!mods.iter().any(|m| m.id == "zoom" || m.id == "fps"));
     }
 
     #[test]
