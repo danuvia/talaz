@@ -462,6 +462,7 @@ fn faster_graphics() -> Result<(), String> {
 // none of Mojang's files ship with Talaz
 const PACK: &[(&str, &[u8])] = &[
     ("manifest.json", include_bytes!("../../../mod/pack/manifest.json")),
+    ("texts/en_US.lang", include_bytes!("../../../mod/pack/texts/en_US.lang")),
     ("textures/ui/talaz/clear.png", include_bytes!("../../../mod/pack/textures/ui/talaz/clear.png")),
     ("textures/ui/talaz/white.png", include_bytes!("../../../mod/pack/textures/ui/talaz/white.png")),
     ("textures/ui/talaz/saturation_full.png", include_bytes!("../../../mod/pack/textures/ui/talaz/saturation_full.png")),
